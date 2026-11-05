@@ -114,32 +114,7 @@ graph TD
 
 ### 4.3 Grounded context retrieval response schema (`grounded_qa_schema.json`)
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GroundedQAResponse",
-  "type": "object",
-  "required": ["answer", "has_sufficient_context", "citations"],
-  "additionalProperties": false,
-  "properties": {
-    "answer": { "type": "string" },
-    "has_sufficient_context": { "type": "boolean" },
-    "citations": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["decision_code", "decision_title", "quoted_passage"],
-        "additionalProperties": false,
-        "properties": {
-          "decision_code": { "type": "string" },
-          "decision_title": { "type": "string" },
-          "quoted_passage": { "type": "string" }
-        }
-      }
-    }
-  }
-}
-```
+**See grounded_qa_schema.json and grounded_qa_schema.png files**
 
 ---
 
