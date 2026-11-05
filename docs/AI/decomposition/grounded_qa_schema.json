@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GroundedQAResponse",
+  "type": "object",
+  "required": ["answer", "has_sufficient_context", "citations"],
+  "additionalProperties": false,
+  "properties": {
+    "answer": { "type": "string" },
+    "has_sufficient_context": { "type": "boolean" },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decision_code", "decision_title", "quoted_passage"],
+        "additionalProperties": false,
+        "properties": {
+          "decision_code": { "type": "string" },
+          "decision_title": { "type": "string" },
+          "quoted_passage": { "type": "string" }
+        }
+      }
+    }
+  }
+}
