@@ -1,4 +1,4 @@
-# System Design Document (SDD)
+# System design document (SDD)
 
 ## Team AI orchestrator
 
