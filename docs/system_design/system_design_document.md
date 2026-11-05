@@ -32,41 +32,41 @@ graph TD
     classDef storage fill:#ffebee,stroke:#b71c1c,stroke-width:2px;
     classDef external fill:#eceff1,stroke:#37474f,stroke-width:2px;
 
-    subgraph Client ["Client Layer"]
+    subgraph Client ["Client layer"]
         Frontend["React Web SPA"]:::client
     end
 
-    subgraph Backend ["Spring Boot Modular Monolith (Core Backend)"]
-        subgraph SecurityLayer ["API & Security Layer"]
-            Controllers["REST Controllers"]
-            SecurityModule["Security & RBAC (Project Owner vs Member)"]
+    subgraph Backend ["Spring Boot Modular monolith (Core backend)"]
+        subgraph SecurityLayer ["API and security layer"]
+            Controllers["REST controllers"]
+            SecurityModule["Security and RBAC (Project owner vs Member)"]
         end
 
-        subgraph DomainModules ["Domain Modules"]
-            AIDecomp["AI Decomposition Module (DAG Validator)"]:::domain
-            SharedMemory["Shared Project Memory (ADR Engine)"]:::domain
-            ContextEngine["Context Engine / RAG (Chunker & Vector Indexer)"]:::domain
-            ConflictDetector["Conflict Detection Module (Hash Pinned)"]:::domain
-            GitHubSync["GitHub Integration Module (OAuth & Webhooks)"]:::domain
-            AnalyticsModule["Analytics Module (Metrics & Token Logger)"]:::domain
+        subgraph DomainModules ["Domain modules"]
+            AIDecomp["AI decomposition module (DAG Validator)"]:::domain
+            SharedMemory["Shared project memory (ADR engine)"]:::domain
+            ContextEngine["Context engine / RAG (Chunker and vector indexer)"]:::domain
+            ConflictDetector["Conflict detection module (Hash pinned)"]:::domain
+            GitHubSync["GitHub integration module (OAuth and webhooks)"]:::domain
+            AnalyticsModule["Analytics module (Metrics and token logger)"]:::domain
         end
 
-        subgraph DataAccessLayer ["Data Access Layer (Spring Data JPA)"]
-            DAL["Repositories & Transaction Managers"]:::dal
+        subgraph DataAccessLayer ["Data access layer (Spring data JPA)"]
+            DAL["Repositories and transaction managers"]:::dal
         end
     end
 
-    subgraph StorageLayer ["Data & Storage Layer"]
+    subgraph StorageLayer ["Data and storage layer"]
         DB[(PostgreSQL 16 + pgvector)]:::storage
     end
 
-    subgraph External ["External Services"]
+    subgraph External ["External services"]
         LLMService((External LLM / Embeddings API)):::external
         GitHubAPI((GitHub REST API v3)):::external
     end
 
-    %% Flow and Communication
-    Frontend -->|HTTPS / REST JSON| Controllers
+    %% Flow and communication
+    Frontend -->|HTTPS / REST JSON| controllers
 
     Controllers --> SecurityModule
     Controllers --> AIDecomp
@@ -86,7 +86,7 @@ graph TD
     AIDecomp -->|Log metrics| AnalyticsModule
     ConflictDetector -->|Log outcomes| AnalyticsModule
     
-    GitHubSync -->|OAuth & Issue Sync| GitHubAPI
+    GitHubSync -->|OAuth and issue sync| GitHubAPI
     
     AIDecomp --> DAL
     SharedMemory --> DAL
