@@ -66,7 +66,7 @@ graph TD
 ### 2.3 Grounded context retrieval pipeline
 * **Input:** User query scoped to a `project_id`.
 * **Process:**
-  1. **Vector query:** Generates query embedding and executes similarity search against `memory_chunks` using `pgvector` HNSW index ($1 - \text{cosine\_distance}$).
+  1. **Vector query:** Generates query embedding and executes similarity search against `memory_chunks` using `pgvector` HNSW index ($1 - \text{cosine\distance}$).
   2. **Filtering:** Applies SQL filters: `WHERE project_id = :projectId AND status = 'APPROVED'`.
   3. **Context assembly and generation:** If max similarity score is below threshold (e.g., $< 0.70$), returns `INSUFFICIENT_CONTEXT`. Otherwise, passes top-$k$ chunks ($k=5$) to LLM for grounded answer generation with inline citations.
 
