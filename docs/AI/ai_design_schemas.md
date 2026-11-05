@@ -110,32 +110,7 @@ graph TD
 
 ### 4.2 Conflict Detection Response Schema (`conflict_check_schema.json`)
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ConflictCheckResponse",
-  "type": "object",
-  "required": ["status", "reasoning", "evidence_source_codes"],
-  "additionalProperties": false,
-  "properties": {
-    "status": {
-      "type": "string",
-      "enum": ["NO_CONFLICT", "POSSIBLE_CONFLICT", "INSUFFICIENT_CONTEXT"]
-    },
-    "reasoning": {
-      "type": "string",
-      "minLength": 10
-    },
-    "evidence_source_codes": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "description": "Decision codes cited as evidence (e.g. ADR-001)"
-      }
-    }
-  }
-}
-```
+**See conflict_check_schema.json and conflict_check_schema.png files**
 
 ### 4.3 Grounded context retrieval response schema (`grounded_qa_schema.json`)
 
