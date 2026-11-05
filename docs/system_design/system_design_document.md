@@ -145,4 +145,43 @@ graph TD
 
 ### 4.2 Sequence diagram: decision proposal and hash-pinned conflict check
 
-**See Sequence_diagram.png file in this folder**
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Member as Team member
+    participant SPA as React frontend
+    participant API as Security gateway
+    participant Conflict as Conflict detection module
+    participant Context as Context engine (RAG)
+    participant DB as PostgreSQL (pgvector)
+    participant LLM as External LLM API
+    actor Owner as Project owner
+
+    Member->>SPA: Enters decision proposal and clicks "Check conflict"
+    SPA->>API: POST /api/projects/{id}/decisions/check-conflict
+    API->>Conflict: checkConflict(projectId, proposalText)
+    Conflict->>Context: retrieveContext(projectId, proposalText)
+    Context->>DB: Cosine similarity search (project_id = X AND status = 'APPROVED')
+    DB-->>Context: Return top-k memory_chunks
+    Context-->>Conflict: Return context passages + source IDs
+    
+    Conflict->>LLM: Send prompt (Proposal + ADR context)
+    LLM-->>Conflict: Return JSON { status: "POSSIBLE_CONFLICT", evidence_source_ids: [...] }
+    Conflict->>DB: Save conflict_checks (with checked_content_hash)
+    Conflict-->>API: Return ConflictCheckResponse
+    API-->>SPA: Render conflict warning and evidence citations
+    
+    Member->>SPA: Submits decision proposal
+    SPA->>API: POST /api/projects/{id}/decisions (status = 'PROPOSED')
+    API->>DB: Save DecisionVersion (status = 'PROPOSED')
+    
+    Note over Owner, SPA: Project owner approval phase
+    Owner->>SPA: Opens proposal, inspects warning and fills Override justification
+    SPA->>API: POST /api/decisions/{id}/approve (with justification)
+    API->>Conflict: validateOverrideJustification()
+    API->>DB: Save conflict_overrides and set DecisionVersion status = 'APPROVED'
+    API-->>Context: Publish AdrApprovedEvent
+    Context->>LLM: Generate vector embeddings (configurable dim)
+    LLM-->>Context: Return vector embeddings
+    Context->>DB: INSERT INTO memory_chunks (chunk_index, chunk_hash, indexing_status = 'INDEXED')
+```
