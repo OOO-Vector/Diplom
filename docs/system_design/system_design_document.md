@@ -23,7 +23,80 @@ Rather than deploying distributed microservices—which introduce network overhe
 
 ## 2. High-level architecture component diagram
 
-**See system_arch_component_diagram.png file in this folder**
+```mermaid
+graph TD
+    classDef client fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef core fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+    classDef domain fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px;
+    classDef dal fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef storage fill:#ffebee,stroke:#b71c1c,stroke-width:2px;
+    classDef external fill:#eceff1,stroke:#37474f,stroke-width:2px;
+
+    subgraph Client ["Client Layer"]
+        Frontend["React Web SPA"]:::client
+    end
+
+    subgraph Backend ["Spring Boot Modular Monolith (Core Backend)"]
+        subgraph SecurityLayer ["API & Security Layer"]
+            Controllers["REST Controllers"]
+            SecurityModule["Security & RBAC (Project Owner vs Member)"]
+        end
+
+        subgraph DomainModules ["Domain Modules"]
+            AIDecomp["AI Decomposition Module (DAG Validator)"]:::domain
+            SharedMemory["Shared Project Memory (ADR Engine)"]:::domain
+            ContextEngine["Context Engine / RAG (Chunker & Vector Indexer)"]:::domain
+            ConflictDetector["Conflict Detection Module (Hash Pinned)"]:::domain
+            GitHubSync["GitHub Integration Module (OAuth & Webhooks)"]:::domain
+            AnalyticsModule["Analytics Module (Metrics & Token Logger)"]:::domain
+        end
+
+        subgraph DataAccessLayer ["Data Access Layer (Spring Data JPA)"]
+            DAL["Repositories & Transaction Managers"]:::dal
+        end
+    end
+
+    subgraph StorageLayer ["Data & Storage Layer"]
+        DB[(PostgreSQL 16 + pgvector)]:::storage
+    end
+
+    subgraph External ["External Services"]
+        LLMService((External LLM / Embeddings API)):::external
+        GitHubAPI((GitHub REST API v3)):::external
+    end
+
+    %% Flow and Communication
+    Frontend -->|HTTPS / REST JSON| Controllers
+
+    Controllers --> SecurityModule
+    Controllers --> AIDecomp
+    Controllers --> SharedMemory
+    Controllers --> ConflictDetector
+    Controllers --> ContextEngine
+    Controllers --> GitHubSync
+    Controllers --> AnalyticsModule
+
+    ConflictDetector --> ContextEngine
+    ConflictDetector -->|Prompt + context| LLMService
+    AIDecomp -->|Spec text parsing| LLMService
+    ContextEngine -->|Embedding generation| LLMService
+    ContextEngine -->|Vector similarity search| DB
+
+    SharedMemory -->|AdrApprovedEvent| ContextEngine
+    AIDecomp -->|Log metrics| AnalyticsModule
+    ConflictDetector -->|Log outcomes| AnalyticsModule
+    
+    GitHubSync -->|OAuth & Issue Sync| GitHubAPI
+    
+    AIDecomp --> DAL
+    SharedMemory --> DAL
+    ContextEngine --> DAL
+    ConflictDetector --> DAL
+    GitHubSync --> DAL
+    AnalyticsModule --> DAL
+
+    DAL -->|SQL / pgvector queries| DB
+```
 
 ## 3. Subsystem and module specifications
 
