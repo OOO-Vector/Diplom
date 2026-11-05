@@ -23,7 +23,7 @@ Rather than deploying distributed microservices—which introduce network overhe
 
 ## 2. High-level architecture component diagram
 
-**See separate diagram file in this folder**
+**See system_arch_component_diagram.png file in this folder**
 
 ## 3. Subsystem and module specifications
 
@@ -72,4 +72,4 @@ Rather than deploying distributed microservices—which introduce network overhe
 
 ### 4.2 Sequence diagram: decision proposal and hash-pinned conflict check
 
-**See separate diagram file in this folder**
+**See Sequence_diagram.png file in this folder**
