@@ -1,8 +1,7 @@
 # AI system design and JSON schemas specification
 
 ## Team AI orchestrator
-
-**Version:** 1.3 (Synchronized and revised)  
+ 
 **Target backend:** Spring Boot 3.x (Java 21) / Spring AI / OpenAI REST API  
 **Vector engine:** PostgreSQL 16+ with `pgvector` (`vector(1536)` HNSW cosine index)
 
@@ -11,10 +10,10 @@
 ## 1. AI subsystem and pipeline architecture
 
 The AI subsystem executes four core workflows:
-1. **Requirements decomposition pipeline:** Parses specifications into acyclic backlogs (Epics, Tasks, Subtasks) with non-empty `acceptance_criteria`, initial `approval_status = 'DRAFT'` and `execution_status = 'BACKLOG'`.
+1. **Requirements decomposition pipeline:** Parses specifications into acyclic backlogs (Epics, tasks, subtasks) with non-empty `acceptance_criteria`, initial `approval_status = 'DRAFT'` and `execution_status = 'BACKLOG'`.
 2. **Shared memory indexing pipeline:** Chunks approved ADR versions, calculates SHA-256 hashes (`chunk_hash`) and persists vector embeddings (`vector(1536)`) with `indexing_status = 'INDEXED'`.
 3. **Filtered context retrieval (RAG) pipeline:** Performs similarity searches over active `APPROVED` ADR chunks in `INDEXED` status to provide grounded answers with citations.
-4. **Version-pinned conflict detection pipeline:** Persists a proposed decision draft first (`PROPOSED` status), calculates its content hash (`checked_content_hash`), and checks it against approved ADR chunks. If the proposal content is subsequently edited, the stored check status is marked `RECHECK_REQUIRED`.
+4. **Version-pinned conflict detection pipeline:** Persists a proposed decision draft first (`PROPOSED` status), calculates its content hash (`checked_content_hash`) and checks it against approved ADR chunks. If the proposal content is subsequently edited, the stored check status is marked `RECHECK_REQUIRED`.
 
 ```mermaid
 graph TD
@@ -197,4 +196,4 @@ graph TD
 1. **Schema validation retry:** Malformed LLM outputs trigger up to 2 corrective retries. Failing calls log `operation_status = 'FAILED'` in `ai_operation_logs`.
 2. **DAG validation error handling:** Graph cycles trigger payload rejection, logging `operation_status = 'FAILED'` with cycle error details.
 3. **Non-hallucination fallback:** If RAG similarity search returns 0 passages exceeding threshold $0.70$, generation is skipped, returning `INSUFFICIENT_CONTEXT`.
-4. **Analytics logging guarantee:** All AI requests log model name, token counts (`prompt_tokens`, `completion_tokens`), generation latency, error messages, and review outcomes (`ACCEPTED`, `MODIFIED`, `REJECTED`).
+4. **Analytics logging guarantee:** All AI requests log model name, token counts (`prompt_tokens`, `completion_tokens`), generation latency, error messages and review outcomes (`ACCEPTED`, `MODIFIED`, `REJECTED`).
