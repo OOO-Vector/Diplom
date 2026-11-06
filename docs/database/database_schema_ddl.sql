@@ -1,0 +1,198 @@
+-- Enable PostgreSQL extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- ============================================================================
+-- 1. USERS, PROJECTS, AND GITHUB INTEGRATION
+-- ============================================================================
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE projects (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(150) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- Project memberships with standardized roles: PROJECT_OWNER, PROJECT_MEMBER
+CREATE TABLE project_members (
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(30) NOT NULL CONSTRAINT chk_project_member_role CHECK (role IN ('PROJECT_OWNER', 'PROJECT_MEMBER')),
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (project_id, user_id)
+);
+
+CREATE TABLE github_integrations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+    repo_owner VARCHAR(100) NOT NULL,
+    repo_name VARCHAR(100) NOT NULL,
+    access_token_encrypted TEXT NOT NULL,
+    default_branch VARCHAR(50) DEFAULT 'main' NOT NULL,
+    installation_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- ============================================================================
+-- 2. SPECIFICATIONS AND TASKS (EP-01 & EP-04)
+-- ============================================================================
+
+CREATE TABLE specifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(10) NOT NULL CONSTRAINT chk_spec_file_type CHECK (file_type IN ('TXT', 'PDF')),
+    raw_content TEXT NOT NULL,
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT uq_spec_project UNIQUE (id, project_id)
+);
+
+CREATE TABLE tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    specification_id UUID,
+    parent_task_id UUID,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    acceptance_criteria TEXT NOT NULL,
+    task_type VARCHAR(20) NOT NULL CONSTRAINT chk_task_type CHECK (task_type IN ('EPIC', 'TASK', 'SUBTASK')),
+    
+    -- Separated statuses: Approval, Execution, and GitHub Sync
+    approval_status VARCHAR(30) DEFAULT 'DRAFT' NOT NULL CONSTRAINT chk_approval_status CHECK (approval_status IN ('DRAFT', 'CONFIRMED', 'APPROVED')),
+    execution_status VARCHAR(30) DEFAULT 'BACKLOG' NOT NULL CONSTRAINT chk_execution_status CHECK (execution_status IN ('BACKLOG', 'IN_PROGRESS', 'DONE')),
+    github_sync_status VARCHAR(30) DEFAULT 'NOT_SYNCED' NOT NULL CONSTRAINT chk_github_sync_status CHECK (github_sync_status IN ('NOT_SYNCED', 'SYNCING', 'SYNCED', 'FAILED')),
+    
+    github_issue_id BIGINT,
+    github_issue_url VARCHAR(500),
+    version BIGINT DEFAULT 0 NOT NULL, -- Optimistic lock counter for DAG edits
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    
+    CONSTRAINT uq_task_project UNIQUE (id, project_id),
+    CONSTRAINT uq_project_github_issue UNIQUE (project_id, github_issue_id), -- Race protection against duplicate issues
+    CONSTRAINT fk_task_spec_project FOREIGN KEY (specification_id, project_id) REFERENCES specifications(id, project_id) ON DELETE SET NULL, -- Composite FK preserves project_id
+    CONSTRAINT fk_task_parent_project FOREIGN KEY (parent_task_id, project_id) REFERENCES tasks(id, project_id) ON DELETE CASCADE,
+    CONSTRAINT chk_no_self_parent CHECK (id <> parent_task_id)
+);
+
+CREATE TABLE task_dependencies (
+    blocking_task_id UUID NOT NULL,
+    blocked_task_id UUID NOT NULL,
+    project_id UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (blocking_task_id, blocked_task_id),
+    CONSTRAINT chk_no_self_dependency CHECK (blocking_task_id <> blocked_task_id),
+    CONSTRAINT fk_dep_blocking FOREIGN KEY (blocking_task_id, project_id) REFERENCES tasks(id, project_id) ON DELETE CASCADE,
+    CONSTRAINT fk_dep_blocked FOREIGN KEY (blocked_task_id, project_id) REFERENCES tasks(id, project_id) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- 3. SHARED PROJECT MEMORY: ADRS AND VECTOR CHUNKS (EP-02)
+-- ============================================================================
+
+CREATE TABLE architecture_decisions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    decision_code VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT uq_project_decision UNIQUE (id, project_id),
+    CONSTRAINT uq_project_decision_code UNIQUE (project_id, decision_code)
+);
+
+CREATE TABLE decision_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    decision_id UUID NOT NULL,
+    project_id UUID NOT NULL,
+    version_number INTEGER NOT NULL CONSTRAINT chk_version_number CHECK (version_number > 0),
+    title VARCHAR(255) NOT NULL,
+    rationale TEXT NOT NULL,
+    content TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL CONSTRAINT chk_decision_status CHECK (status IN ('PROPOSED', 'APPROVED', 'SUPERSEDED', 'REJECTED')),
+    created_by_user_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT uq_decision_version_id UNIQUE (id, project_id),
+    CONSTRAINT uq_decision_version_num UNIQUE (decision_id, version_number),
+    CONSTRAINT fk_version_decision_project FOREIGN KEY (decision_id, project_id) REFERENCES architecture_decisions(id, project_id) ON DELETE CASCADE
+);
+
+-- Vector chunks allowing NULL embedding while indexing_status = 'PENDING'
+CREATE TABLE memory_chunks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    decision_version_id UUID NOT NULL,
+    project_id UUID NOT NULL,
+    chunk_index INTEGER NOT NULL CONSTRAINT chk_chunk_index CHECK (chunk_index >= 0),
+    chunk_text TEXT NOT NULL,
+    chunk_hash VARCHAR(64) NOT NULL,
+    embedding vector(1536), -- NULL until embedding is computed
+    indexing_status VARCHAR(20) DEFAULT 'PENDING' NOT NULL CONSTRAINT chk_indexing_status CHECK (indexing_status IN ('PENDING', 'INDEXED', 'FAILED')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_chunk_version_project FOREIGN KEY (decision_version_id, project_id) REFERENCES decision_versions(id, project_id) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- 4. CONFLICT DETECTION AND OVERRIDES (EP-03)
+-- ============================================================================
+
+CREATE TABLE conflict_checks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    proposed_version_id UUID NOT NULL,
+    initiated_by_user_id UUID NOT NULL REFERENCES users(id),
+    checked_content_hash VARCHAR(64) NOT NULL,
+    status VARCHAR(30) NOT NULL CONSTRAINT chk_conflict_status CHECK (status IN ('NO_CONFLICT', 'POSSIBLE_CONFLICT', 'INSUFFICIENT_CONTEXT', 'RECHECK_REQUIRED')),
+    evidence_source_ids JSONB DEFAULT '[]'::jsonb NOT NULL,
+    checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_conflict_proposed_version FOREIGN KEY (proposed_version_id, project_id) REFERENCES decision_versions(id, project_id) ON DELETE CASCADE
+);
+
+CREATE TABLE conflict_overrides (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conflict_check_id UUID NOT NULL UNIQUE REFERENCES conflict_checks(id) ON DELETE CASCADE,
+    approved_by_user_id UUID NOT NULL REFERENCES users(id),
+    justification TEXT NOT NULL,
+    overridden_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- ============================================================================
+-- 5. AI OPERATION LOGS AND ANALYTICS (EP-04)
+-- ============================================================================
+
+CREATE TABLE ai_operation_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    operation_type VARCHAR(50) NOT NULL,
+    operation_status VARCHAR(20) NOT NULL CONSTRAINT chk_op_status CHECK (operation_status IN ('SUCCESS', 'FAILED', 'TIMEOUT')),
+    review_outcome VARCHAR(20) CONSTRAINT chk_review_outcome CHECK (review_outcome IN ('ACCEPTED', 'MODIFIED', 'REJECTED')),
+    model_name VARCHAR(100),
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    generation_duration_ms INTEGER,
+    review_duration_ms INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- ============================================================================
+-- 6. INDEXES
+-- ============================================================================
+
+CREATE INDEX idx_tasks_project ON tasks(project_id);
+CREATE INDEX idx_tasks_parent ON tasks(project_id, parent_task_id);
+CREATE INDEX idx_task_deps_lookup ON task_dependencies(project_id, blocking_task_id, blocked_task_id);
+CREATE INDEX idx_adr_versions_status ON decision_versions(project_id, status);
+CREATE INDEX idx_memory_chunks_version ON memory_chunks(decision_version_id, chunk_index);
+
+-- HNSW Vector Index for populated INDEXED chunks
+CREATE INDEX idx_memory_chunks_vector ON memory_chunks 
+USING hnsw (embedding vector_cosine_ops)
+WHERE indexing_status = 'INDEXED';
