@@ -22,9 +22,9 @@ graph TD
     classDef db fill:#ffebee,stroke:#b71c1c,stroke-width:2px;
 
     subgraph Pipeline1 ["1. Decomposition pipeline"]
-        SpecInput[Raw Spec File] --> StripText[Text Normalizer]
+        SpecInput[Raw spec file] --> StripText[Text normalizer]
         StripText --> DecompLLM((LLM structured output)):::llm
-        DecompLLM --> JSONValidate[Schema & Advisory Lock DAG Validator]
+        DecompLLM --> JSONValidate[Schema and advisory lock DAG validator]
         JSONValidate -->|Valid DAG| SaveDraft[Save draft tasks]
         JSONValidate -->|Cycle/Invalid| FallbackRetry[Retry / Reject payload]
     end
@@ -36,7 +36,7 @@ graph TD
     end
 
     subgraph Pipeline3 ["3. Version-pinned conflict detection"]
-        SaveProp[Save Proposal Draft - PROPOSED] --> HashCalc[Compute Content Hash]
+        SaveProp[Save proposal draft - PROPOSED] --> HashCalc[Compute content hash]
         HashCalc --> VectorSearch[SQL vector search]
         VectorDB -->|top-k INDEXED approved chunks| VectorSearch
         VectorSearch --> ConflictLLM((LLM conflict evaluator)):::llm
