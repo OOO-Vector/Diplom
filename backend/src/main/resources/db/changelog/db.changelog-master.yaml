@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-enable-pgvector.sql
+
+  - include:
+      file: db/changelog/changes/002-create-core.sql
+
+  - include:
+      file: db/changelog/changes/003-core-ownership.sql
+
+  - include:
+      file: db/changelog/changes/004-create-planning.sql
+
+  - include:
+      file: db/changelog/changes/005-create-project-memory.sql
+
+  - include:
+      file: db/changelog/changes/006-create-github-integration.sql
+
+  - include:
+      file: db/changelog/changes/007-create-ai-chat.sql
+
+  - include:
+      file: db/changelog/changes/008-create-conflict-ml.sql
+
+  - include:
+      file: db/changelog/changes/009-create-analytics-events.sql
+
+  - include:
+      file: db/changelog/changes/010-prevent-task-dependency-cycles.sql
+
+  - include:
+      file: db/changelog/changes/011-grant-app-privileges.sql
+
+  - include:
+      file: db/changelog/changes/012-optimize-indexes.sql

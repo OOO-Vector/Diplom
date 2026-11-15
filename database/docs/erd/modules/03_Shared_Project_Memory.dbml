@@ -1,0 +1,103 @@
+// Team AI Orchestrator | 03 Shared Project Memory
+// Generated from actual PostgreSQL schema export, 2026-11-15.
+// 5 tables, 5 internal FK constraints, 7 external FK constraints.
+// Module view shows only internal FK lines, to keep diagram readable.
+// All external FK relationships are preserved in the complete full-schema.dbml.
+// DBML does not fully encode CHECK, trigger, RLS, and PostgreSQL-specific index expressions.
+
+Project Team_AI_03_Shared_Project_Memory {
+  database_type: 'PostgreSQL'
+}
+
+Table architectural_decisions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  decision_key varchar(80) [not null]
+  title varchar(250) [not null]
+  status varchar(20) [not null, default: 'proposed']
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+    (project_id, decision_key) [unique]
+  }
+}
+
+Table decision_versions {
+  id uuid [pk, not null]
+  decision_id uuid [not null]
+  version integer [not null]
+  context_text text [not null]
+  decision_text text [not null]
+  rationale text
+  consequences text
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (decision_id, version) [unique]
+    (decision_id, id) [unique]
+  }
+}
+
+Table decision_resolutions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  decision_id uuid [not null]
+  related_decision_id uuid [not null]
+  resolution_type varchar(20) [not null]
+  status varchar(20) [not null, default: 'pending']
+  resolution_notes text
+  resolved_by uuid
+  resolved_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table knowledge_sources {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  source_type varchar(20) [not null]
+  specification_id uuid
+  decision_id uuid
+  title varchar(250) [not null]
+  source_uri text
+  content_hash varchar(128)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table knowledge_chunks {
+  id uuid [pk, not null]
+  source_id uuid [not null]
+  chunk_index integer [not null]
+  content text [not null]
+  embedding vector
+  embedding_model varchar(150)
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (source_id, chunk_index) [unique]
+    (source_id, id) [unique]
+  }
+}
+
+Ref: decision_resolutions.(project_id, decision_id) > architectural_decisions.(project_id, id) // fk_resolution_decision
+Ref: decision_resolutions.(project_id, related_decision_id) > architectural_decisions.(project_id, id) // fk_resolution_related
+Ref: decision_versions.decision_id > architectural_decisions.id // fk_decision_version_decision
+Ref: knowledge_chunks.source_id > knowledge_sources.id [delete: cascade] // fk_chunk_source
+Ref: knowledge_sources.(project_id, decision_id) > architectural_decisions.(project_id, id) // fk_knowledge_decision
+
+// External foreign keys (visible on full diagram):
+// architectural_decisions.(created_by) -> users.(id) [fk_decision_creator]
+// architectural_decisions.(project_id) -> projects.(id) [fk_decision_project]
+// decision_resolutions.(project_id) -> projects.(id) [fk_resolution_project]
+// decision_resolutions.(resolved_by) -> users.(id) [fk_resolution_user]
+// decision_versions.(created_by) -> users.(id) [fk_decision_version_author]
+// knowledge_sources.(project_id) -> projects.(id) [fk_knowledge_project]
+// knowledge_sources.(project_id, specification_id) -> specifications.(project_id, id) [fk_knowledge_spec]

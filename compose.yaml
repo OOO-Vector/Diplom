@@ -1,0 +1,27 @@
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: team-ai-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: team_ai_db
+      POSTGRES_USER: team_ai_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/security/002-init-roles.sh:/docker-entrypoint-initdb.d/002-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U team_ai_admin -d team_ai_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

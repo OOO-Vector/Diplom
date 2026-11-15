@@ -1,0 +1,114 @@
+Pager usage is off.
+Timing is on.
+ database_name |        postgres_version         
+---------------+---------------------------------
+ team_ai_db    | 16.16 (Debian 16.16-1.pgdg12+1)
+(1 row)
+
+Time: 0.401 ms
+=== Q1: paginated task backlog ===
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..18.64 rows=50 width=51) (actual time=0.029..0.075 rows=50 loops=1)
+   Output: id, title, status, priority, sort_order
+   Buffers: shared hit=9 read=3
+   ->  Index Scan using ix_tasks_backlog_status_order on public.tasks  (cost=0.29..881.28 rows=2400 width=51) (actual time=0.028..0.069 rows=50 loops=1)
+         Output: id, title, status, priority, sort_order
+         Index Cond: ((tasks.backlog_id = '00000000-0000-4000-8000-00000000f031'::uuid) AND ((tasks.status)::text = 'ready'::text))
+         Buffers: shared hit=9 read=3
+ Planning:
+   Buffers: shared hit=173 read=1
+ Planning Time: 0.814 ms
+ Execution Time: 0.096 ms
+(11 rows)
+
+Time: 2.372 ms
+=== Q2: accepted architectural decisions ===
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..21.43 rows=100 width=71) (actual time=0.051..0.181 rows=100 loops=1)
+   Output: id, decision_key, title, updated_at
+   Buffers: shared hit=100 read=2
+   ->  Index Scan using ix_decisions_project_status_order on public.architectural_decisions  (cost=0.28..158.91 rows=750 width=71) (actual time=0.050..0.174 rows=100 loops=1)
+         Output: id, decision_key, title, updated_at
+         Index Cond: ((architectural_decisions.project_id = '00000000-0000-4000-8000-00000000f011'::uuid) AND ((architectural_decisions.status)::text = 'accepted'::text))
+         Buffers: shared hit=100 read=2
+ Planning:
+   Buffers: shared hit=130 read=1
+ Planning Time: 0.331 ms
+ Execution Time: 0.190 ms
+(11 rows)
+
+Time: 1.024 ms
+=== Q3: recent chat messages ===
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..4.54 rows=50 width=58) (actual time=0.030..0.079 rows=50 loops=1)
+   Output: id, sender, content, created_at
+   Buffers: shared hit=4
+   ->  Index Scan Backward using ix_chat_messages_session_timeline on public.chat_messages  (cost=0.29..852.22 rows=10000 width=58) (actual time=0.030..0.075 rows=50 loops=1)
+         Output: id, sender, content, created_at
+         Index Cond: (chat_messages.session_id = '00000000-0000-4000-8000-00000000f041'::uuid)
+         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=94
+ Planning Time: 0.198 ms
+ Execution Time: 0.089 ms
+(11 rows)
+
+Time: 0.558 ms
+=== Q4: pending outbox dispatch ===
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1.93..17.05 rows=100 width=52) (actual time=0.154..0.212 rows=100 loops=1)
+   Output: id, event_type, next_attempt_at, created_at
+   Buffers: shared hit=120
+   ->  Incremental Sort  (cost=1.93..1815.33 rows=11999 width=52) (actual time=0.154..0.207 rows=100 loops=1)
+         Output: id, event_type, next_attempt_at, created_at
+         Sort Key: outbox_events.next_attempt_at, outbox_events.created_at, outbox_events.id
+         Presorted Key: outbox_events.next_attempt_at
+         Full-sort Groups: 3  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
+         Buffers: shared hit=120
+         ->  Index Scan using ix_outbox_dispatch on public.outbox_events  (cost=0.29..1430.27 rows=11999 width=52) (actual time=0.033..0.113 rows=109 loops=1)
+               Output: id, event_type, next_attempt_at, created_at
+               Index Cond: (((outbox_events.status)::text = 'pending'::text) AND (outbox_events.next_attempt_at <= now()))
+               Buffers: shared hit=111
+ Planning:
+   Buffers: shared hit=87
+ Planning Time: 0.241 ms
+ Execution Time: 0.226 ms
+(17 rows)
+
+Time: 0.801 ms
+=== Q5: project review analytics view ===
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=346.51..346.56 rows=3 width=89) (actual time=2.740..2.743 rows=3 loops=1)
+   Output: a.project_id, r.outcome, count(*), count(r.duration_ms), (count(*) - count(r.duration_ms)), round(avg(r.duration_ms), 2), sum(r.corrections_count)
+   Group Key: r.outcome
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=146
+   ->  Hash Join  (cost=189.00..296.51 rows=4000 width=37) (actual time=1.054..2.069 rows=4000 loops=1)
+         Output: r.outcome, a.project_id, r.duration_ms, r.corrections_count
+         Inner Unique: true
+         Hash Cond: (r.ai_operation_id = a.id)
+         Buffers: shared hit=146
+         ->  Seq Scan on public.review_events r  (cost=0.00..97.00 rows=4000 width=37) (actual time=0.002..0.211 rows=4000 loops=1)
+               Output: r.id, r.ai_operation_id, r.reviewer_id, r.outcome, r.duration_ms, r.corrections_count, r.reviewed_at
+               Buffers: shared hit=57
+         ->  Hash  (cost=139.00..139.00 rows=4000 width=32) (actual time=0.998..0.998 rows=4000 loops=1)
+               Output: a.project_id, a.id
+               Buckets: 4096  Batches: 1  Memory Usage: 282kB
+               Buffers: shared hit=89
+               ->  Seq Scan on public.ai_operations a  (cost=0.00..139.00 rows=4000 width=32) (actual time=0.002..0.486 rows=4000 loops=1)
+                     Output: a.project_id, a.id
+                     Filter: (a.project_id = '00000000-0000-4000-8000-00000000f011'::uuid)
+                     Buffers: shared hit=89
+ Planning:
+   Buffers: shared hit=218
+ Planning Time: 0.487 ms
+ Execution Time: 2.790 ms
+(25 rows)
+
+Time: 3.897 ms
+=== BENCHMARKS COMPLETE ===

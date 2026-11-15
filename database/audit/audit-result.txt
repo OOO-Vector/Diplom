@@ -1,0 +1,132 @@
+Pager usage is off.
+=== 1. DATABASE + VERSION ===
+ database_name |    db_user    |                                                       postgres_version                                                       
+---------------+---------------+------------------------------------------------------------------------------------------------------------------------------
+ team_ai_db    | team_ai_admin | PostgreSQL 16.16 (Debian 16.16-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+(1 row)
+
+=== 2. LIQUIBASE HISTORY ===
+ orderexecuted |              id               | author | exectype |                        filename                        
+---------------+-------------------------------+--------+----------+--------------------------------------------------------
+             1 | 001-enable-pgvector           | teamai | EXECUTED | db/changelog/changes/001-enable-pgvector.sql
+             2 | 002-create-core               | teamai | EXECUTED | db/changelog/changes/002-create-core.sql
+             3 | 003-core-ownership            | teamai | EXECUTED | db/changelog/changes/003-core-ownership.sql
+             4 | 004-create-planning           | teamai | EXECUTED | db/changelog/changes/004-create-planning.sql
+             5 | 005-create-project-memory     | teamai | EXECUTED | db/changelog/changes/005-create-project-memory.sql
+             6 | 006-create-github-integration | teamai | EXECUTED | db/changelog/changes/006-create-github-integration.sql
+             7 | 007-create-ai-chat            | teamai | EXECUTED | db/changelog/changes/007-create-ai-chat.sql
+             8 | 008-create-conflict-ml        | teamai | EXECUTED | db/changelog/changes/008-create-conflict-ml.sql
+             9 | 009-create-analytics-events   | teamai | EXECUTED | db/changelog/changes/009-create-analytics-events.sql
+(9 rows)
+
+=== 3. DOMAIN TABLE COUNT (excluding Liquibase) ===
+ domain_table_count 
+--------------------
+                 27
+(1 row)
+
+=== 4. DOMAIN TABLES + ROW COUNTS (planner estimates) ===
+       table_name        | estimated_rows 
+-------------------------+----------------
+ activity_events         |             -1
+ ai_operations           |             -1
+ architectural_decisions |             -1
+ backlogs                |             -1
+ chat_message_sources    |             -1
+ chat_messages           |             -1
+ chat_sessions           |             -1
+ conflict_checks         |             -1
+ conflict_evidence       |             -1
+ decision_resolutions    |             -1
+ decision_versions       |             -1
+ github_connections      |             -1
+ github_issues           |             -1
+ knowledge_chunks        |             -1
+ knowledge_sources       |             -1
+ ml_datasets             |             -1
+ ml_models               |             -1
+ ml_predictions          |             -1
+ ml_training_examples    |             -1
+ outbox_events           |             -1
+ project_members         |             -1
+ projects                |             -1
+ review_events           |             -1
+ specifications          |             -1
+ task_dependencies       |             -1
+ tasks                   |             -1
+ users                   |             -1
+(27 rows)
+
+=== 5. TABLES WITHOUT PRIMARY KEY ===
+ table_name 
+------------
+(0 rows)
+
+=== 6. CONSTRAINT COUNTS BY TYPE ===
+ constraint_type | total 
+-----------------+-------
+ check           |   103
+ foreign_key     |    55
+ primary_key     |    27
+ t               |     2
+ unique          |    27
+(5 rows)
+
+=== 7. FOREIGN KEYS WITHOUT A LEADING-KEY INDEX ON REFERENCING TABLE (review candidates) ===
+      table_name      |               foreign_key               |                  columns                   
+----------------------+-----------------------------------------+--------------------------------------------
+ backlogs             | fk_backlog_spec_project                 | {project_id,specification_id}
+ decision_versions    | fk_decision_version_author              | {created_by}
+ decision_resolutions | fk_resolution_user                      | {resolved_by}
+ knowledge_sources    | fk_knowledge_decision                   | {project_id,decision_id}
+ knowledge_sources    | fk_knowledge_spec                       | {project_id,specification_id}
+ github_issues        | fk_github_issue_backlog_same_project    | {project_id,backlog_id}
+ github_issues        | fk_github_issue_connection_same_project | {project_id,connection_id}
+ github_issues        | fk_github_issue_task_same_backlog       | {backlog_id,task_id}
+ chat_messages        | fk_chat_messages_author                 | {author_id}
+ chat_messages        | fk_chat_messages_operation              | {project_id,ai_operation_id}
+ chat_messages        | fk_chat_messages_session                | {project_id,session_id}
+ chat_message_sources | fk_citations_message                    | {project_id,message_id}
+ conflict_checks      | fk_conflict_operation                   | {project_id,ai_operation_id}
+ conflict_checks      | fk_conflict_proposed_decision           | {project_id,proposed_decision_id}
+ conflict_checks      | fk_conflict_proposed_version            | {proposed_decision_id,proposed_version_id}
+ conflict_evidence    | fk_evidence_check                       | {project_id,conflict_check_id}
+ conflict_evidence    | fk_evidence_decision                    | {project_id,related_decision_id}
+ conflict_evidence    | fk_evidence_version                     | {related_decision_id,decision_version_id}
+ ml_predictions       | fk_prediction_check                     | {project_id,conflict_check_id}
+ ml_predictions       | fk_prediction_decision                  | {project_id,compared_decision_id}
+ ml_predictions       | fk_prediction_version                   | {compared_decision_id,compared_version_id}
+ activity_events      | fk_activity_actor                       | {actor_id}
+(22 rows)
+
+=== 8. USER-DEFINED TRIGGERS ===
+   table_name    |               tgname               | tgenabled | tgdeferrable | tginitdeferred 
+-----------------+------------------------------------+-----------+--------------+----------------
+ project_members | trg_membership_must_preserve_owner | O         | t            | t
+ projects        | trg_project_must_have_owner        | O         | t            | t
+(2 rows)
+
+=== 9. VIEWS ===
+ schemaname |     viewname      
+------------+-------------------
+ public     | v_ai_review_stats
+(1 row)
+
+=== 10. EXTENSIONS ===
+ extname | extversion 
+---------+------------
+ plpgsql | 1.0
+ vector  | 0.8.7
+(2 rows)
+
+=== 11. INVALID INDEXES ===
+ table_name | index_name | indisvalid | indisready 
+------------+------------+------------+------------
+(0 rows)
+
+=== 12. INCONSISTENT PROJECT OWNERSHIP ===
+ id | name | owner_count 
+----+------+-------------
+(0 rows)
+
+=== AUDIT COMPLETE (READ ONLY) ===

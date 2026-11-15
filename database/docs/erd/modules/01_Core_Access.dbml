@@ -1,0 +1,47 @@
+// Team AI Orchestrator | 01 Core Access
+// Generated from actual PostgreSQL schema export, 2026-11-15.
+// 3 tables, 3 internal FK constraints, 0 external FK constraints.
+// Module view shows only internal FK lines, to keep diagram readable.
+// All external FK relationships are preserved in the complete full-schema.dbml.
+// DBML does not fully encode CHECK, trigger, RLS, and PostgreSQL-specific index expressions.
+
+Project Team_AI_01_Core_Access {
+  database_type: 'PostgreSQL'
+}
+
+Table users {
+  id uuid [pk, not null]
+  email varchar(254) [not null]
+  password_hash text [not null]
+  display_name varchar(100) [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table projects {
+  id uuid [pk, not null]
+  name varchar(150) [not null]
+  description text
+  created_by uuid [not null]
+  status varchar(20) [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table project_members {
+  project_id uuid [not null]
+  user_id uuid [not null]
+  role varchar(20) [not null]
+  joined_at timestamptz [not null]
+
+  indexes {
+    (project_id, user_id) [pk]
+  }
+}
+
+Ref: project_members.project_id > projects.id // fk_project_members_project
+Ref: project_members.user_id > users.id // fk_project_members_user
+Ref: projects.created_by > users.id // fk_projects_created_by
+
+// External foreign keys (visible on full diagram):

@@ -1,0 +1,104 @@
+schema_name,table_name,index_name,is_primary,is_unique,is_valid,definition
+public,activity_events,activity_events_pkey,t,t,t,CREATE UNIQUE INDEX activity_events_pkey ON public.activity_events USING btree (id)
+public,activity_events,ix_activity_events_project_time,f,f,t,"CREATE INDEX ix_activity_events_project_time ON public.activity_events USING btree (project_id, occurred_at DESC)"
+public,activity_events,ix_activity_events_type_time,f,f,t,"CREATE INDEX ix_activity_events_type_time ON public.activity_events USING btree (project_id, event_type, occurred_at DESC)"
+public,ai_operations,ai_operations_pkey,t,t,t,CREATE UNIQUE INDEX ai_operations_pkey ON public.ai_operations USING btree (id)
+public,ai_operations,ix_ai_operations_initiated_by,f,f,t,CREATE INDEX ix_ai_operations_initiated_by ON public.ai_operations USING btree (initiated_by)
+public,ai_operations,ix_ai_operations_project_created,f,f,t,"CREATE INDEX ix_ai_operations_project_created ON public.ai_operations USING btree (project_id, created_at DESC)"
+public,ai_operations,uq_ai_operations_project_id,f,t,t,"CREATE UNIQUE INDEX uq_ai_operations_project_id ON public.ai_operations USING btree (project_id, id)"
+public,architectural_decisions,architectural_decisions_pkey,t,t,t,CREATE UNIQUE INDEX architectural_decisions_pkey ON public.architectural_decisions USING btree (id)
+public,architectural_decisions,ix_decisions_creator,f,f,t,CREATE INDEX ix_decisions_creator ON public.architectural_decisions USING btree (created_by)
+public,architectural_decisions,ix_decisions_project_status,f,f,t,"CREATE INDEX ix_decisions_project_status ON public.architectural_decisions USING btree (project_id, status)"
+public,architectural_decisions,ix_decisions_project_status_order,f,f,t,"CREATE INDEX ix_decisions_project_status_order ON public.architectural_decisions USING btree (project_id, status, updated_at DESC, id)"
+public,architectural_decisions,uq_decision_project_id,f,t,t,"CREATE UNIQUE INDEX uq_decision_project_id ON public.architectural_decisions USING btree (project_id, id)"
+public,architectural_decisions,uq_decision_project_key,f,t,t,"CREATE UNIQUE INDEX uq_decision_project_key ON public.architectural_decisions USING btree (project_id, decision_key)"
+public,backlogs,backlogs_pkey,t,t,t,CREATE UNIQUE INDEX backlogs_pkey ON public.backlogs USING btree (id)
+public,backlogs,ix_backlogs_project,f,f,t,CREATE INDEX ix_backlogs_project ON public.backlogs USING btree (project_id)
+public,backlogs,uq_backlog_spec_version,f,t,t,"CREATE UNIQUE INDEX uq_backlog_spec_version ON public.backlogs USING btree (specification_id, version)"
+public,backlogs,uq_backlogs_project_id,f,t,t,"CREATE UNIQUE INDEX uq_backlogs_project_id ON public.backlogs USING btree (project_id, id)"
+public,chat_message_sources,ix_chat_citations_chunk,f,f,t,"CREATE INDEX ix_chat_citations_chunk ON public.chat_message_sources USING btree (source_id, chunk_id)"
+public,chat_message_sources,ix_chat_citations_source,f,f,t,"CREATE INDEX ix_chat_citations_source ON public.chat_message_sources USING btree (project_id, source_id)"
+public,chat_message_sources,pk_chat_message_sources,t,t,t,"CREATE UNIQUE INDEX pk_chat_message_sources ON public.chat_message_sources USING btree (message_id, chunk_id)"
+public,chat_message_sources,uq_chat_citations_order,f,t,t,"CREATE UNIQUE INDEX uq_chat_citations_order ON public.chat_message_sources USING btree (message_id, citation_order)"
+public,chat_messages,chat_messages_pkey,t,t,t,CREATE UNIQUE INDEX chat_messages_pkey ON public.chat_messages USING btree (id)
+public,chat_messages,ix_chat_messages_author,f,f,t,CREATE INDEX ix_chat_messages_author ON public.chat_messages USING btree (author_id) WHERE (author_id IS NOT NULL)
+public,chat_messages,ix_chat_messages_operation,f,f,t,CREATE INDEX ix_chat_messages_operation ON public.chat_messages USING btree (ai_operation_id) WHERE (ai_operation_id IS NOT NULL)
+public,chat_messages,ix_chat_messages_session_timeline,f,f,t,"CREATE INDEX ix_chat_messages_session_timeline ON public.chat_messages USING btree (session_id, created_at, id)"
+public,chat_messages,uq_chat_messages_project_id,f,t,t,"CREATE UNIQUE INDEX uq_chat_messages_project_id ON public.chat_messages USING btree (project_id, id)"
+public,chat_sessions,chat_sessions_pkey,t,t,t,CREATE UNIQUE INDEX chat_sessions_pkey ON public.chat_sessions USING btree (id)
+public,chat_sessions,ix_chat_sessions_created_by,f,f,t,CREATE INDEX ix_chat_sessions_created_by ON public.chat_sessions USING btree (created_by)
+public,chat_sessions,ix_chat_sessions_project_updated,f,f,t,"CREATE INDEX ix_chat_sessions_project_updated ON public.chat_sessions USING btree (project_id, updated_at DESC)"
+public,chat_sessions,uq_chat_sessions_project_id,f,t,t,"CREATE UNIQUE INDEX uq_chat_sessions_project_id ON public.chat_sessions USING btree (project_id, id)"
+public,conflict_checks,conflict_checks_pkey,t,t,t,CREATE UNIQUE INDEX conflict_checks_pkey ON public.conflict_checks USING btree (id)
+public,conflict_checks,ix_conflict_operation,f,f,t,CREATE INDEX ix_conflict_operation ON public.conflict_checks USING btree (ai_operation_id) WHERE (ai_operation_id IS NOT NULL)
+public,conflict_checks,ix_conflict_project_checked,f,f,t,"CREATE INDEX ix_conflict_project_checked ON public.conflict_checks USING btree (project_id, checked_at DESC)"
+public,conflict_checks,ix_conflict_proposed,f,f,t,"CREATE INDEX ix_conflict_proposed ON public.conflict_checks USING btree (proposed_version_id, checked_at DESC)"
+public,conflict_checks,uq_conflict_project_id,f,t,t,"CREATE UNIQUE INDEX uq_conflict_project_id ON public.conflict_checks USING btree (project_id, id)"
+public,conflict_checks,uq_conflict_proposal_id,f,t,t,"CREATE UNIQUE INDEX uq_conflict_proposal_id ON public.conflict_checks USING btree (proposed_version_id, id)"
+public,conflict_evidence,conflict_evidence_pkey,t,t,t,CREATE UNIQUE INDEX conflict_evidence_pkey ON public.conflict_evidence USING btree (id)
+public,conflict_evidence,ix_evidence_related_version,f,f,t,CREATE INDEX ix_evidence_related_version ON public.conflict_evidence USING btree (decision_version_id)
+public,conflict_evidence,uq_evidence_pair,f,t,t,"CREATE UNIQUE INDEX uq_evidence_pair ON public.conflict_evidence USING btree (conflict_check_id, decision_version_id)"
+public,decision_resolutions,decision_resolutions_pkey,t,t,t,CREATE UNIQUE INDEX decision_resolutions_pkey ON public.decision_resolutions USING btree (id)
+public,decision_resolutions,ix_resolutions_decision,f,f,t,"CREATE INDEX ix_resolutions_decision ON public.decision_resolutions USING btree (project_id, decision_id)"
+public,decision_resolutions,ix_resolutions_related,f,f,t,"CREATE INDEX ix_resolutions_related ON public.decision_resolutions USING btree (project_id, related_decision_id)"
+public,decision_resolutions,ix_resolutions_status,f,f,t,"CREATE INDEX ix_resolutions_status ON public.decision_resolutions USING btree (project_id, status)"
+public,decision_versions,decision_versions_pkey,t,t,t,CREATE UNIQUE INDEX decision_versions_pkey ON public.decision_versions USING btree (id)
+public,decision_versions,ix_decision_versions_created,f,f,t,"CREATE INDEX ix_decision_versions_created ON public.decision_versions USING btree (decision_id, created_at DESC)"
+public,decision_versions,uq_decision_version,f,t,t,"CREATE UNIQUE INDEX uq_decision_version ON public.decision_versions USING btree (decision_id, version)"
+public,decision_versions,uq_decision_versions_decision_id,f,t,t,"CREATE UNIQUE INDEX uq_decision_versions_decision_id ON public.decision_versions USING btree (decision_id, id)"
+public,github_connections,github_connections_pkey,t,t,t,CREATE UNIQUE INDEX github_connections_pkey ON public.github_connections USING btree (id)
+public,github_connections,ix_github_connections_connected_by,f,f,t,CREATE INDEX ix_github_connections_connected_by ON public.github_connections USING btree (connected_by)
+public,github_connections,uq_github_connection_project,f,t,t,CREATE UNIQUE INDEX uq_github_connection_project ON public.github_connections USING btree (project_id)
+public,github_connections,uq_github_connection_project_id,f,t,t,"CREATE UNIQUE INDEX uq_github_connection_project_id ON public.github_connections USING btree (project_id, id)"
+public,github_issues,github_issues_pkey,t,t,t,CREATE UNIQUE INDEX github_issues_pkey ON public.github_issues USING btree (id)
+public,github_issues,ix_github_issues_backlog,f,f,t,CREATE INDEX ix_github_issues_backlog ON public.github_issues USING btree (backlog_id)
+public,github_issues,ix_github_issues_project_sync_status,f,f,t,"CREATE INDEX ix_github_issues_project_sync_status ON public.github_issues USING btree (project_id, sync_status)"
+public,github_issues,uq_github_issue_task,f,t,t,"CREATE UNIQUE INDEX uq_github_issue_task ON public.github_issues USING btree (connection_id, task_id)"
+public,github_issues,ux_github_issue_external_id_per_connection,f,t,t,"CREATE UNIQUE INDEX ux_github_issue_external_id_per_connection ON public.github_issues USING btree (connection_id, github_issue_id) WHERE (github_issue_id IS NOT NULL)"
+public,github_issues,ux_github_issue_number_per_connection,f,t,t,"CREATE UNIQUE INDEX ux_github_issue_number_per_connection ON public.github_issues USING btree (connection_id, github_issue_number) WHERE (github_issue_number IS NOT NULL)"
+public,knowledge_chunks,knowledge_chunks_pkey,t,t,t,CREATE UNIQUE INDEX knowledge_chunks_pkey ON public.knowledge_chunks USING btree (id)
+public,knowledge_chunks,uq_chunk_index,f,t,t,"CREATE UNIQUE INDEX uq_chunk_index ON public.knowledge_chunks USING btree (source_id, chunk_index)"
+public,knowledge_chunks,uq_knowledge_chunks_source_id,f,t,t,"CREATE UNIQUE INDEX uq_knowledge_chunks_source_id ON public.knowledge_chunks USING btree (source_id, id)"
+public,knowledge_sources,ix_knowledge_decision,f,f,t,CREATE INDEX ix_knowledge_decision ON public.knowledge_sources USING btree (decision_id) WHERE (decision_id IS NOT NULL)
+public,knowledge_sources,ix_knowledge_project_type,f,f,t,"CREATE INDEX ix_knowledge_project_type ON public.knowledge_sources USING btree (project_id, source_type)"
+public,knowledge_sources,ix_knowledge_spec,f,f,t,CREATE INDEX ix_knowledge_spec ON public.knowledge_sources USING btree (specification_id) WHERE (specification_id IS NOT NULL)
+public,knowledge_sources,knowledge_sources_pkey,t,t,t,CREATE UNIQUE INDEX knowledge_sources_pkey ON public.knowledge_sources USING btree (id)
+public,knowledge_sources,uq_knowledge_project_id,f,t,t,"CREATE UNIQUE INDEX uq_knowledge_project_id ON public.knowledge_sources USING btree (project_id, id)"
+public,ml_datasets,ml_datasets_pkey,t,t,t,CREATE UNIQUE INDEX ml_datasets_pkey ON public.ml_datasets USING btree (id)
+public,ml_datasets,uq_ml_datasets_name_version,f,t,t,"CREATE UNIQUE INDEX uq_ml_datasets_name_version ON public.ml_datasets USING btree (name, version)"
+public,ml_models,ix_ml_models_dataset,f,f,t,CREATE INDEX ix_ml_models_dataset ON public.ml_models USING btree (dataset_id)
+public,ml_models,ml_models_pkey,t,t,t,CREATE UNIQUE INDEX ml_models_pkey ON public.ml_models USING btree (id)
+public,ml_models,uq_ml_models_name_version,f,t,t,"CREATE UNIQUE INDEX uq_ml_models_name_version ON public.ml_models USING btree (name, version)"
+public,ml_models,ux_ml_models_one_active_per_name,f,t,t,CREATE UNIQUE INDEX ux_ml_models_one_active_per_name ON public.ml_models USING btree (name) WHERE is_active
+public,ml_predictions,ix_predictions_check,f,f,t,CREATE INDEX ix_predictions_check ON public.ml_predictions USING btree (conflict_check_id)
+public,ml_predictions,ix_predictions_model,f,f,t,CREATE INDEX ix_predictions_model ON public.ml_predictions USING btree (model_id)
+public,ml_predictions,ml_predictions_pkey,t,t,t,CREATE UNIQUE INDEX ml_predictions_pkey ON public.ml_predictions USING btree (id)
+public,ml_predictions,uq_prediction_comparison,f,t,t,"CREATE UNIQUE INDEX uq_prediction_comparison ON public.ml_predictions USING btree (conflict_check_id, compared_version_id, model_id)"
+public,ml_training_examples,ix_ml_examples_dataset_split,f,f,t,"CREATE INDEX ix_ml_examples_dataset_split ON public.ml_training_examples USING btree (dataset_id, data_split)"
+public,ml_training_examples,ml_training_examples_pkey,t,t,t,CREATE UNIQUE INDEX ml_training_examples_pkey ON public.ml_training_examples USING btree (id)
+public,ml_training_examples,uq_ml_examples_dataset_pair,f,t,t,"CREATE UNIQUE INDEX uq_ml_examples_dataset_pair ON public.ml_training_examples USING btree (dataset_id, pair_sha256)"
+public,outbox_events,ix_outbox_dispatch,f,f,t,"CREATE INDEX ix_outbox_dispatch ON public.outbox_events USING btree (status, next_attempt_at)"
+public,outbox_events,ix_outbox_project_time,f,f,t,"CREATE INDEX ix_outbox_project_time ON public.outbox_events USING btree (project_id, created_at DESC)"
+public,outbox_events,outbox_events_pkey,t,t,t,CREATE UNIQUE INDEX outbox_events_pkey ON public.outbox_events USING btree (id)
+public,outbox_events,uq_outbox_project_deduplication,f,t,t,"CREATE UNIQUE INDEX uq_outbox_project_deduplication ON public.outbox_events USING btree (project_id, deduplication_key)"
+public,project_members,ix_project_members_user,f,f,t,CREATE INDEX ix_project_members_user ON public.project_members USING btree (user_id)
+public,project_members,pk_project_members,t,t,t,"CREATE UNIQUE INDEX pk_project_members ON public.project_members USING btree (project_id, user_id)"
+public,project_members,ux_project_members_single_owner,f,t,t,CREATE UNIQUE INDEX ux_project_members_single_owner ON public.project_members USING btree (project_id) WHERE ((role)::text = 'owner'::text)
+public,projects,ix_projects_created_by,f,f,t,CREATE INDEX ix_projects_created_by ON public.projects USING btree (created_by)
+public,projects,projects_pkey,t,t,t,CREATE UNIQUE INDEX projects_pkey ON public.projects USING btree (id)
+public,review_events,ix_review_events_operation_time,f,f,t,"CREATE INDEX ix_review_events_operation_time ON public.review_events USING btree (ai_operation_id, reviewed_at DESC)"
+public,review_events,ix_review_events_reviewer_time,f,f,t,"CREATE INDEX ix_review_events_reviewer_time ON public.review_events USING btree (reviewer_id, reviewed_at DESC)"
+public,review_events,review_events_pkey,t,t,t,CREATE UNIQUE INDEX review_events_pkey ON public.review_events USING btree (id)
+public,specifications,ix_specifications_uploaded_by,f,f,t,CREATE INDEX ix_specifications_uploaded_by ON public.specifications USING btree (uploaded_by)
+public,specifications,specifications_pkey,t,t,t,CREATE UNIQUE INDEX specifications_pkey ON public.specifications USING btree (id)
+public,specifications,uq_spec_project_id,f,t,t,"CREATE UNIQUE INDEX uq_spec_project_id ON public.specifications USING btree (project_id, id)"
+public,specifications,uq_spec_project_version,f,t,t,"CREATE UNIQUE INDEX uq_spec_project_version ON public.specifications USING btree (project_id, version)"
+public,task_dependencies,ix_dependencies_blocked,f,f,t,"CREATE INDEX ix_dependencies_blocked ON public.task_dependencies USING btree (backlog_id, blocked_task_id)"
+public,task_dependencies,pk_task_dependencies,t,t,t,"CREATE UNIQUE INDEX pk_task_dependencies ON public.task_dependencies USING btree (backlog_id, blocking_task_id, blocked_task_id)"
+public,tasks,ix_tasks_backlog_status,f,f,t,"CREATE INDEX ix_tasks_backlog_status ON public.tasks USING btree (backlog_id, status)"
+public,tasks,ix_tasks_backlog_status_order,f,f,t,"CREATE INDEX ix_tasks_backlog_status_order ON public.tasks USING btree (backlog_id, status, sort_order, id)"
+public,tasks,ix_tasks_parent,f,f,t,"CREATE INDEX ix_tasks_parent ON public.tasks USING btree (backlog_id, parent_task_id)"
+public,tasks,tasks_pkey,t,t,t,CREATE UNIQUE INDEX tasks_pkey ON public.tasks USING btree (id)
+public,tasks,uq_task_backlog_id,f,t,t,"CREATE UNIQUE INDEX uq_task_backlog_id ON public.tasks USING btree (backlog_id, id)"
+public,users,users_pkey,t,t,t,CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)
+public,users,ux_users_email_ci,f,t,t,CREATE UNIQUE INDEX ux_users_email_ci ON public.users USING btree (lower((email)::text))

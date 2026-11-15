@@ -1,0 +1,85 @@
+// Team AI Orchestrator | 05 AI Chat
+// Generated from actual PostgreSQL schema export, 2026-11-15.
+// 4 tables, 3 internal FK constraints, 7 external FK constraints.
+// Module view shows only internal FK lines, to keep diagram readable.
+// All external FK relationships are preserved in the complete full-schema.dbml.
+// DBML does not fully encode CHECK, trigger, RLS, and PostgreSQL-specific index expressions.
+
+Project Team_AI_05_AI_Chat {
+  database_type: 'PostgreSQL'
+}
+
+Table ai_operations {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  initiated_by uuid [not null]
+  operation_type varchar(30) [not null]
+  status varchar(20) [not null, default: 'queued']
+  provider varchar(80)
+  model_name varchar(100)
+  input_tokens integer
+  output_tokens integer
+  duration_ms bigint
+  created_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  finished_at timestamptz
+  error_message text
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_sessions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  created_by uuid [not null]
+  title varchar(255)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_messages {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  session_id uuid [not null]
+  author_id uuid
+  ai_operation_id uuid
+  sender varchar(20) [not null]
+  content text [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_message_sources {
+  project_id uuid [not null]
+  message_id uuid [not null]
+  source_id uuid [not null]
+  chunk_id uuid [not null]
+  citation_order integer [not null]
+
+  indexes {
+    (message_id, chunk_id) [pk]
+    (message_id, citation_order) [unique]
+  }
+}
+
+Ref: chat_message_sources.(project_id, message_id) > chat_messages.(project_id, id) [delete: cascade] // fk_citations_message
+Ref: chat_messages.(project_id, ai_operation_id) > ai_operations.(project_id, id) // fk_chat_messages_operation
+Ref: chat_messages.(project_id, session_id) > chat_sessions.(project_id, id) // fk_chat_messages_session
+
+// External foreign keys (visible on full diagram):
+// ai_operations.(initiated_by) -> users.(id) [fk_ai_operations_initiator]
+// ai_operations.(project_id) -> projects.(id) [fk_ai_operations_project]
+// chat_message_sources.(source_id, chunk_id) -> knowledge_chunks.(source_id, id) [fk_citations_chunk_source]
+// chat_message_sources.(project_id, source_id) -> knowledge_sources.(project_id, id) [fk_citations_source]
+// chat_messages.(author_id) -> users.(id) [fk_chat_messages_author]
+// chat_sessions.(created_by) -> users.(id) [fk_chat_sessions_creator]
+// chat_sessions.(project_id) -> projects.(id) [fk_chat_sessions_project]

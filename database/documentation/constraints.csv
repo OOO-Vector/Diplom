@@ -1,0 +1,216 @@
+schema_name,table_name,constraint_name,constraint_type,definition,deferrable,initially_deferred,validated
+public,activity_events,ck_activity_entity_pair,CHECK,CHECK ((entity_type IS NULL) = (entity_id IS NULL)),f,f,t
+public,activity_events,ck_activity_entity_type,CHECK,CHECK (entity_type IS NULL OR length(btrim(entity_type::text)) > 0),f,f,t
+public,activity_events,ck_activity_event_type,CHECK,CHECK (length(btrim(event_type::text)) > 0),f,f,t
+public,activity_events,fk_activity_actor,FOREIGN KEY,FOREIGN KEY (actor_id) REFERENCES users(id),f,f,t
+public,activity_events,fk_activity_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,activity_events,activity_events_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ai_operations,ck_ai_operations_error_state,CHECK,CHECK (status::text = 'failed'::text AND error_message IS NOT NULL AND length(btrim(error_message)) > 0 OR status::text <> 'failed'::text AND error_message IS NULL),f,f,t
+public,ai_operations,ck_ai_operations_finished_time,CHECK,CHECK (finished_at IS NULL OR started_at IS NOT NULL AND finished_at >= started_at),f,f,t
+public,ai_operations,ck_ai_operations_lifecycle,CHECK,"CHECK (status::text = 'queued'::text AND started_at IS NULL AND finished_at IS NULL OR status::text = 'running'::text AND started_at IS NOT NULL AND finished_at IS NULL OR (status::text = ANY (ARRAY['completed'::character varying, 'failed'::character varying]::text[])) AND started_at IS NOT NULL AND finished_at IS NOT NULL)",f,f,t
+public,ai_operations,ck_ai_operations_metrics,CHECK,CHECK ((input_tokens IS NULL OR input_tokens >= 0) AND (output_tokens IS NULL OR output_tokens >= 0) AND (duration_ms IS NULL OR duration_ms >= 0)),f,f,t
+public,ai_operations,ck_ai_operations_started_time,CHECK,CHECK (started_at IS NULL OR started_at >= created_at),f,f,t
+public,ai_operations,ck_ai_operations_status,CHECK,"CHECK (status::text = ANY (ARRAY['queued'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying]::text[]))",f,f,t
+public,ai_operations,ck_ai_operations_type,CHECK,"CHECK (operation_type::text = ANY (ARRAY['task_decomposition'::character varying, 'context_chat'::character varying, 'conflict_check'::character varying, 'context_indexing'::character varying]::text[]))",f,f,t
+public,ai_operations,fk_ai_operations_initiator,FOREIGN KEY,FOREIGN KEY (initiated_by) REFERENCES users(id),f,f,t
+public,ai_operations,fk_ai_operations_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,ai_operations,ai_operations_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ai_operations,uq_ai_operations_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,architectural_decisions,ck_decision_key_nonempty,CHECK,CHECK (length(btrim(decision_key::text)) > 0 AND decision_key::text = btrim(decision_key::text)),f,f,t
+public,architectural_decisions,ck_decision_status,CHECK,"CHECK (status::text = ANY (ARRAY['proposed'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'superseded'::character varying]::text[]))",f,f,t
+public,architectural_decisions,ck_decision_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,architectural_decisions,ck_decision_title_nonempty,CHECK,CHECK (length(btrim(title::text)) > 0),f,f,t
+public,architectural_decisions,fk_decision_creator,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES users(id),f,f,t
+public,architectural_decisions,fk_decision_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,architectural_decisions,architectural_decisions_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,architectural_decisions,uq_decision_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,architectural_decisions,uq_decision_project_key,UNIQUE,"UNIQUE (project_id, decision_key)",f,f,t
+public,backlogs,ck_backlog_approval,CHECK,"CHECK (status::text = 'draft'::text AND approved_at IS NULL OR (status::text = ANY (ARRAY['approved'::character varying, 'published'::character varying]::text[])) AND approved_at IS NOT NULL)",f,f,t
+public,backlogs,ck_backlog_status,CHECK,"CHECK (status::text = ANY (ARRAY['draft'::character varying, 'approved'::character varying, 'published'::character varying]::text[]))",f,f,t
+public,backlogs,ck_backlog_version,CHECK,CHECK (version > 0),f,f,t
+public,backlogs,fk_backlog_spec_project,FOREIGN KEY,"FOREIGN KEY (project_id, specification_id) REFERENCES specifications(project_id, id)",f,f,t
+public,backlogs,backlogs_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,backlogs,uq_backlog_spec_version,UNIQUE,"UNIQUE (specification_id, version)",f,f,t
+public,backlogs,uq_backlogs_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,chat_message_sources,ck_chat_citations_order,CHECK,CHECK (citation_order > 0),f,f,t
+public,chat_message_sources,fk_citations_chunk_source,FOREIGN KEY,"FOREIGN KEY (source_id, chunk_id) REFERENCES knowledge_chunks(source_id, id)",f,f,t
+public,chat_message_sources,fk_citations_message,FOREIGN KEY,"FOREIGN KEY (project_id, message_id) REFERENCES chat_messages(project_id, id) ON DELETE CASCADE",f,f,t
+public,chat_message_sources,fk_citations_source,FOREIGN KEY,"FOREIGN KEY (project_id, source_id) REFERENCES knowledge_sources(project_id, id)",f,f,t
+public,chat_message_sources,pk_chat_message_sources,PRIMARY KEY,"PRIMARY KEY (message_id, chunk_id)",f,f,t
+public,chat_message_sources,uq_chat_citations_order,UNIQUE,"UNIQUE (message_id, citation_order)",f,f,t
+public,chat_messages,ck_chat_messages_author,CHECK,CHECK ((sender::text = 'user'::text) = (author_id IS NOT NULL)),f,f,t
+public,chat_messages,ck_chat_messages_content,CHECK,CHECK (length(btrim(content)) > 0),f,f,t
+public,chat_messages,ck_chat_messages_operation_sender,CHECK,CHECK (ai_operation_id IS NULL OR sender::text = 'assistant'::text),f,f,t
+public,chat_messages,ck_chat_messages_sender,CHECK,"CHECK (sender::text = ANY (ARRAY['user'::character varying, 'assistant'::character varying, 'system'::character varying]::text[]))",f,f,t
+public,chat_messages,fk_chat_messages_author,FOREIGN KEY,FOREIGN KEY (author_id) REFERENCES users(id),f,f,t
+public,chat_messages,fk_chat_messages_operation,FOREIGN KEY,"FOREIGN KEY (project_id, ai_operation_id) REFERENCES ai_operations(project_id, id)",f,f,t
+public,chat_messages,fk_chat_messages_session,FOREIGN KEY,"FOREIGN KEY (project_id, session_id) REFERENCES chat_sessions(project_id, id)",f,f,t
+public,chat_messages,chat_messages_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,chat_messages,uq_chat_messages_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,chat_sessions,ck_chat_sessions_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,chat_sessions,ck_chat_sessions_title,CHECK,CHECK (title IS NULL OR length(btrim(title::text)) > 0),f,f,t
+public,chat_sessions,fk_chat_sessions_creator,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES users(id),f,f,t
+public,chat_sessions,fk_chat_sessions_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,chat_sessions,chat_sessions_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,chat_sessions,uq_chat_sessions_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,conflict_checks,ck_conflict_explanation,CHECK,CHECK (result::text = 'no_conflict'::text OR explanation IS NOT NULL AND length(btrim(explanation)) > 0),f,f,t
+public,conflict_checks,ck_conflict_result,CHECK,"CHECK (result::text = ANY (ARRAY['possible_conflict'::character varying, 'no_conflict'::character varying, 'insufficient_context'::character varying]::text[]))",f,f,t
+public,conflict_checks,fk_conflict_operation,FOREIGN KEY,"FOREIGN KEY (project_id, ai_operation_id) REFERENCES ai_operations(project_id, id)",f,f,t
+public,conflict_checks,fk_conflict_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,conflict_checks,fk_conflict_proposed_decision,FOREIGN KEY,"FOREIGN KEY (project_id, proposed_decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,conflict_checks,fk_conflict_proposed_version,FOREIGN KEY,"FOREIGN KEY (proposed_decision_id, proposed_version_id) REFERENCES decision_versions(decision_id, id)",f,f,t
+public,conflict_checks,conflict_checks_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,conflict_checks,uq_conflict_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,conflict_checks,uq_conflict_proposal_id,UNIQUE,"UNIQUE (proposed_version_id, id)",f,f,t
+public,conflict_evidence,ck_evidence_text,CHECK,CHECK (length(btrim(evidence_text)) > 0),f,f,t
+public,conflict_evidence,fk_evidence_check,FOREIGN KEY,"FOREIGN KEY (project_id, conflict_check_id) REFERENCES conflict_checks(project_id, id) ON DELETE CASCADE",f,f,t
+public,conflict_evidence,fk_evidence_decision,FOREIGN KEY,"FOREIGN KEY (project_id, related_decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,conflict_evidence,fk_evidence_version,FOREIGN KEY,"FOREIGN KEY (related_decision_id, decision_version_id) REFERENCES decision_versions(decision_id, id)",f,f,t
+public,conflict_evidence,conflict_evidence_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,conflict_evidence,uq_evidence_pair,UNIQUE,"UNIQUE (conflict_check_id, decision_version_id)",f,f,t
+public,decision_resolutions,ck_resolution_completion,CHECK,"CHECK (status::text = 'pending'::text AND resolved_by IS NULL AND resolved_at IS NULL OR (status::text = ANY (ARRAY['resolved'::character varying, 'dismissed'::character varying]::text[])) AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL)",f,f,t
+public,decision_resolutions,ck_resolution_distinct,CHECK,CHECK (decision_id <> related_decision_id),f,f,t
+public,decision_resolutions,ck_resolution_status,CHECK,"CHECK (status::text = ANY (ARRAY['pending'::character varying, 'resolved'::character varying, 'dismissed'::character varying]::text[]))",f,f,t
+public,decision_resolutions,ck_resolution_type,CHECK,"CHECK (resolution_type::text = ANY (ARRAY['conflict'::character varying, 'supersession'::character varying]::text[]))",f,f,t
+public,decision_resolutions,fk_resolution_decision,FOREIGN KEY,"FOREIGN KEY (project_id, decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,decision_resolutions,fk_resolution_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,decision_resolutions,fk_resolution_related,FOREIGN KEY,"FOREIGN KEY (project_id, related_decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,decision_resolutions,fk_resolution_user,FOREIGN KEY,FOREIGN KEY (resolved_by) REFERENCES users(id),f,f,t
+public,decision_resolutions,decision_resolutions_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,decision_versions,ck_decision_context_nonempty,CHECK,CHECK (length(btrim(context_text)) > 0),f,f,t
+public,decision_versions,ck_decision_text_nonempty,CHECK,CHECK (length(btrim(decision_text)) > 0),f,f,t
+public,decision_versions,ck_decision_version_positive,CHECK,CHECK (version > 0),f,f,t
+public,decision_versions,fk_decision_version_author,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES users(id),f,f,t
+public,decision_versions,fk_decision_version_decision,FOREIGN KEY,FOREIGN KEY (decision_id) REFERENCES architectural_decisions(id),f,f,t
+public,decision_versions,decision_versions_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,decision_versions,uq_decision_version,UNIQUE,"UNIQUE (decision_id, version)",f,f,t
+public,decision_versions,uq_decision_versions_decision_id,UNIQUE,"UNIQUE (decision_id, id)",f,f,t
+public,github_connections,ck_github_connection_status,CHECK,"CHECK (status::text = ANY (ARRAY['active'::character varying, 'disconnected'::character varying, 'error'::character varying]::text[]))",f,f,t
+public,github_connections,ck_github_connection_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,github_connections,ck_github_installation_id,CHECK,CHECK (installation_id > 0),f,f,t
+public,github_connections,ck_github_repository_id,CHECK,CHECK (repository_id > 0),f,f,t
+public,github_connections,ck_github_repository_name,CHECK,CHECK (length(btrim(repository_name::text)) > 0 AND repository_name::text = btrim(repository_name::text)),f,f,t
+public,github_connections,ck_github_repository_owner,CHECK,CHECK (length(btrim(repository_owner::text)) > 0 AND repository_owner::text = btrim(repository_owner::text)),f,f,t
+public,github_connections,fk_github_connection_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,github_connections,fk_github_connection_user,FOREIGN KEY,FOREIGN KEY (connected_by) REFERENCES users(id),f,f,t
+public,github_connections,github_connections_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,github_connections,uq_github_connection_project,UNIQUE,UNIQUE (project_id),f,f,t
+public,github_connections,uq_github_connection_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,github_issues,ck_github_issue_id,CHECK,CHECK (github_issue_id IS NULL OR github_issue_id > 0),f,f,t
+public,github_issues,ck_github_issue_number,CHECK,CHECK (github_issue_number IS NULL OR github_issue_number > 0),f,f,t
+public,github_issues,ck_github_issue_sync_status,CHECK,"CHECK (sync_status::text = ANY (ARRAY['pending'::character varying, 'synced'::character varying, 'failed'::character varying]::text[]))",f,f,t
+public,github_issues,ck_github_issue_synced_details,CHECK,CHECK (sync_status::text <> 'synced'::text OR github_issue_number IS NOT NULL AND github_issue_url IS NOT NULL),f,f,t
+public,github_issues,ck_github_issue_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,github_issues,ck_github_issue_url,CHECK,CHECK (github_issue_url IS NULL OR length(btrim(github_issue_url)) > 0),f,f,t
+public,github_issues,fk_github_issue_backlog_same_project,FOREIGN KEY,"FOREIGN KEY (project_id, backlog_id) REFERENCES backlogs(project_id, id)",f,f,t
+public,github_issues,fk_github_issue_connection_same_project,FOREIGN KEY,"FOREIGN KEY (project_id, connection_id) REFERENCES github_connections(project_id, id)",f,f,t
+public,github_issues,fk_github_issue_task_same_backlog,FOREIGN KEY,"FOREIGN KEY (backlog_id, task_id) REFERENCES tasks(backlog_id, id)",f,f,t
+public,github_issues,github_issues_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,github_issues,uq_github_issue_task,UNIQUE,"UNIQUE (connection_id, task_id)",f,f,t
+public,knowledge_chunks,ck_chunk_content,CHECK,CHECK (length(btrim(content)) > 0),f,f,t
+public,knowledge_chunks,ck_chunk_embedding_metadata,CHECK,CHECK (embedding IS NULL AND embedding_model IS NULL OR embedding IS NOT NULL AND embedding_model IS NOT NULL AND length(btrim(embedding_model::text)) > 0),f,f,t
+public,knowledge_chunks,ck_chunk_index,CHECK,CHECK (chunk_index >= 0),f,f,t
+public,knowledge_chunks,fk_chunk_source,FOREIGN KEY,FOREIGN KEY (source_id) REFERENCES knowledge_sources(id) ON DELETE CASCADE,f,f,t
+public,knowledge_chunks,knowledge_chunks_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,knowledge_chunks,uq_chunk_index,UNIQUE,"UNIQUE (source_id, chunk_index)",f,f,t
+public,knowledge_chunks,uq_knowledge_chunks_source_id,UNIQUE,"UNIQUE (source_id, id)",f,f,t
+public,knowledge_sources,ck_knowledge_github_uri,CHECK,CHECK (source_type::text <> 'github'::text OR source_uri IS NOT NULL AND length(btrim(source_uri)) > 0),f,f,t
+public,knowledge_sources,ck_knowledge_reference,CHECK,"CHECK (source_type::text = 'specification'::text AND specification_id IS NOT NULL AND decision_id IS NULL OR source_type::text = 'decision'::text AND decision_id IS NOT NULL AND specification_id IS NULL OR (source_type::text = ANY (ARRAY['manual'::character varying, 'github'::character varying]::text[])) AND specification_id IS NULL AND decision_id IS NULL)",f,f,t
+public,knowledge_sources,ck_knowledge_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,knowledge_sources,ck_knowledge_title,CHECK,CHECK (length(btrim(title::text)) > 0),f,f,t
+public,knowledge_sources,ck_knowledge_type,CHECK,"CHECK (source_type::text = ANY (ARRAY['specification'::character varying, 'decision'::character varying, 'manual'::character varying, 'github'::character varying]::text[]))",f,f,t
+public,knowledge_sources,fk_knowledge_decision,FOREIGN KEY,"FOREIGN KEY (project_id, decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,knowledge_sources,fk_knowledge_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,knowledge_sources,fk_knowledge_spec,FOREIGN KEY,"FOREIGN KEY (project_id, specification_id) REFERENCES specifications(project_id, id)",f,f,t
+public,knowledge_sources,knowledge_sources_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,knowledge_sources,uq_knowledge_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,ml_datasets,ck_ml_datasets_digest,CHECK,CHECK (content_sha256::text ~ '^[0-9a-f]{64}$'::text),f,f,t
+public,ml_datasets,ck_ml_datasets_identity,CHECK,CHECK (length(btrim(name::text)) > 0 AND length(btrim(version::text)) > 0),f,f,t
+public,ml_datasets,ck_ml_datasets_origin,CHECK,"CHECK (origin::text = ANY (ARRAY['synthetic'::character varying, 'public'::character varying, 'anonymized'::character varying, 'mixed'::character varying]::text[]))",f,f,t
+public,ml_datasets,ml_datasets_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ml_datasets,uq_ml_datasets_name_version,UNIQUE,"UNIQUE (name, version)",f,f,t
+public,ml_models,ck_ml_models_artifact,CHECK,CHECK (length(btrim(artifact_uri)) > 0),f,f,t
+public,ml_models,ck_ml_models_digest,CHECK,CHECK (artifact_sha256::text ~ '^[0-9a-f]{64}$'::text),f,f,t
+public,ml_models,ck_ml_models_f1,CHECK,CHECK (f1_score IS NULL OR f1_score >= 0::numeric AND f1_score <= 1::numeric),f,f,t
+public,ml_models,ck_ml_models_identity,CHECK,CHECK (length(btrim(name::text)) > 0 AND length(btrim(version::text)) > 0 AND length(btrim(model_type::text)) > 0 AND length(btrim(algorithm::text)) > 0),f,f,t
+public,ml_models,ck_ml_models_precision,CHECK,CHECK (precision_score IS NULL OR precision_score >= 0::numeric AND precision_score <= 1::numeric),f,f,t
+public,ml_models,ck_ml_models_recall,CHECK,CHECK (recall_score IS NULL OR recall_score >= 0::numeric AND recall_score <= 1::numeric),f,f,t
+public,ml_models,ck_ml_models_training_config,CHECK,CHECK (jsonb_typeof(training_config) = 'object'::text),f,f,t
+public,ml_models,fk_ml_models_dataset,FOREIGN KEY,FOREIGN KEY (dataset_id) REFERENCES ml_datasets(id),f,f,t
+public,ml_models,ml_models_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ml_models,uq_ml_models_name_version,UNIQUE,"UNIQUE (name, version)",f,f,t
+public,ml_predictions,ck_prediction_confidence,CHECK,CHECK (confidence_score IS NULL OR confidence_score >= 0::numeric AND confidence_score <= 1::numeric),f,f,t
+public,ml_predictions,ck_prediction_label,CHECK,"CHECK (prediction::text = ANY (ARRAY['conflict'::character varying, 'no_conflict'::character varying]::text[]))",f,f,t
+public,ml_predictions,fk_prediction_check,FOREIGN KEY,"FOREIGN KEY (project_id, conflict_check_id) REFERENCES conflict_checks(project_id, id) ON DELETE CASCADE",f,f,t
+public,ml_predictions,fk_prediction_decision,FOREIGN KEY,"FOREIGN KEY (project_id, compared_decision_id) REFERENCES architectural_decisions(project_id, id)",f,f,t
+public,ml_predictions,fk_prediction_model,FOREIGN KEY,FOREIGN KEY (model_id) REFERENCES ml_models(id),f,f,t
+public,ml_predictions,fk_prediction_version,FOREIGN KEY,"FOREIGN KEY (compared_decision_id, compared_version_id) REFERENCES decision_versions(decision_id, id)",f,f,t
+public,ml_predictions,ml_predictions_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ml_predictions,uq_prediction_comparison,UNIQUE,"UNIQUE (conflict_check_id, compared_version_id, model_id)",f,f,t
+public,ml_training_examples,ck_ml_examples_digest,CHECK,CHECK (pair_sha256::text ~ '^[0-9a-f]{64}$'::text),f,f,t
+public,ml_training_examples,ck_ml_examples_label,CHECK,"CHECK (expected_label::text = ANY (ARRAY['conflict'::character varying, 'no_conflict'::character varying]::text[]))",f,f,t
+public,ml_training_examples,ck_ml_examples_split,CHECK,"CHECK (data_split::text = ANY (ARRAY['train'::character varying, 'validation'::character varying, 'test'::character varying]::text[]))",f,f,t
+public,ml_training_examples,ck_ml_examples_statements,CHECK,CHECK (length(btrim(statement_a)) > 0 AND length(btrim(statement_b)) > 0),f,f,t
+public,ml_training_examples,fk_ml_examples_dataset,FOREIGN KEY,FOREIGN KEY (dataset_id) REFERENCES ml_datasets(id),f,f,t
+public,ml_training_examples,ml_training_examples_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,ml_training_examples,uq_ml_examples_dataset_pair,UNIQUE,"UNIQUE (dataset_id, pair_sha256)",f,f,t
+public,outbox_events,ck_outbox_attempt_time,CHECK,CHECK (next_attempt_at >= created_at),f,f,t
+public,outbox_events,ck_outbox_deduplication,CHECK,CHECK (deduplication_key IS NULL OR length(btrim(deduplication_key::text)) > 0),f,f,t
+public,outbox_events,ck_outbox_envelope,CHECK,"CHECK (jsonb_exists(payload, 'event_id'::text) AND jsonb_exists(payload, 'schema_version'::text) AND jsonb_exists(payload, 'occurred_at'::text) AND jsonb_exists(payload, 'data'::text))",f,f,t
+public,outbox_events,ck_outbox_identity,CHECK,CHECK (length(btrim(event_type::text)) > 0 AND length(btrim(aggregate_type::text)) > 0),f,f,t
+public,outbox_events,ck_outbox_last_error,CHECK,CHECK (last_error IS NULL OR length(btrim(last_error)) > 0),f,f,t
+public,outbox_events,ck_outbox_payload_object,CHECK,CHECK (jsonb_typeof(payload) = 'object'::text),f,f,t
+public,outbox_events,ck_outbox_processed_state,CHECK,CHECK ((status::text = 'processed'::text) = (processed_at IS NOT NULL)),f,f,t
+public,outbox_events,ck_outbox_processed_time,CHECK,CHECK (processed_at IS NULL OR processed_at >= created_at),f,f,t
+public,outbox_events,ck_outbox_retry_count,CHECK,CHECK (retry_count >= 0),f,f,t
+public,outbox_events,ck_outbox_status,CHECK,"CHECK (status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'processed'::character varying, 'failed'::character varying]::text[]))",f,f,t
+public,outbox_events,fk_outbox_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,outbox_events,outbox_events_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,outbox_events,uq_outbox_project_deduplication,UNIQUE,"UNIQUE (project_id, deduplication_key)",f,f,t
+public,project_members,ck_project_members_01,CHECK,"CHECK (role::text = ANY (ARRAY['owner'::character varying, 'member'::character varying]::text[]))",f,f,t
+public,project_members,fk_project_members_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,project_members,fk_project_members_user,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES users(id),f,f,t
+public,project_members,pk_project_members,PRIMARY KEY,"PRIMARY KEY (project_id, user_id)",f,f,t
+public,project_members,trg_membership_must_preserve_owner,CONSTRAINT TRIGGER,TRIGGER DEFERRABLE INITIALLY DEFERRED,t,t,t
+public,projects,ck_projects_01,CHECK,"CHECK (status::text = ANY (ARRAY['active'::character varying, 'archived'::character varying]::text[]))",f,f,t
+public,projects,ck_projects_name_nonempty,CHECK,CHECK (length(btrim(name::text)) > 0),f,f,t
+public,projects,ck_projects_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,projects,fk_projects_created_by,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES users(id),f,f,t
+public,projects,projects_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,projects,trg_project_must_have_owner,CONSTRAINT TRIGGER,TRIGGER DEFERRABLE INITIALLY DEFERRED,t,t,t
+public,review_events,ck_review_corrections,CHECK,CHECK (corrections_count >= 0),f,f,t
+public,review_events,ck_review_duration,CHECK,CHECK (duration_ms IS NULL OR duration_ms >= 0),f,f,t
+public,review_events,ck_review_outcome,CHECK,"CHECK (outcome::text = ANY (ARRAY['accepted'::character varying, 'modified'::character varying, 'rejected'::character varying]::text[]))",f,f,t
+public,review_events,fk_review_operation,FOREIGN KEY,FOREIGN KEY (ai_operation_id) REFERENCES ai_operations(id),f,f,t
+public,review_events,fk_review_reviewer,FOREIGN KEY,FOREIGN KEY (reviewer_id) REFERENCES users(id),f,f,t
+public,review_events,review_events_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,specifications,ck_spec_content,CHECK,CHECK (length(btrim(content)) > 0),f,f,t
+public,specifications,ck_spec_status,CHECK,"CHECK (status::text = ANY (ARRAY['uploaded'::character varying, 'processing'::character varying, 'processed'::character varying, 'failed'::character varying]::text[]))",f,f,t
+public,specifications,ck_spec_title,CHECK,CHECK (length(btrim(title::text)) > 0),f,f,t
+public,specifications,ck_spec_version,CHECK,CHECK (version > 0),f,f,t
+public,specifications,fk_spec_project,FOREIGN KEY,FOREIGN KEY (project_id) REFERENCES projects(id),f,f,t
+public,specifications,fk_spec_uploader,FOREIGN KEY,FOREIGN KEY (uploaded_by) REFERENCES users(id),f,f,t
+public,specifications,specifications_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,specifications,uq_spec_project_id,UNIQUE,"UNIQUE (project_id, id)",f,f,t
+public,specifications,uq_spec_project_version,UNIQUE,"UNIQUE (project_id, version)",f,f,t
+public,task_dependencies,ck_dep_no_self_reference,CHECK,CHECK (blocking_task_id <> blocked_task_id),f,f,t
+public,task_dependencies,fk_dep_blocked_same_backlog,FOREIGN KEY,"FOREIGN KEY (backlog_id, blocked_task_id) REFERENCES tasks(backlog_id, id) ON DELETE CASCADE",f,f,t
+public,task_dependencies,fk_dep_blocking_same_backlog,FOREIGN KEY,"FOREIGN KEY (backlog_id, blocking_task_id) REFERENCES tasks(backlog_id, id) ON DELETE CASCADE",f,f,t
+public,task_dependencies,pk_task_dependencies,PRIMARY KEY,"PRIMARY KEY (backlog_id, blocking_task_id, blocked_task_id)",f,f,t
+public,task_dependencies,trg_task_dependencies_acyclic,CONSTRAINT TRIGGER,TRIGGER DEFERRABLE INITIALLY DEFERRED,t,t,t
+public,tasks,ck_task_not_own_parent,CHECK,CHECK (parent_task_id IS NULL OR parent_task_id <> id),f,f,t
+public,tasks,ck_task_priority,CHECK,CHECK (priority >= 1 AND priority <= 5),f,f,t
+public,tasks,ck_task_sort,CHECK,CHECK (sort_order >= 0),f,f,t
+public,tasks,ck_task_status,CHECK,"CHECK (status::text = ANY (ARRAY['draft'::character varying, 'ready'::character varying, 'in_progress'::character varying, 'in_review'::character varying, 'done'::character varying, 'cancelled'::character varying]::text[]))",f,f,t
+public,tasks,ck_task_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,tasks,ck_task_title,CHECK,CHECK (length(btrim(title::text)) > 0),f,f,t
+public,tasks,ck_task_type,CHECK,"CHECK (task_type::text = ANY (ARRAY['epic'::character varying, 'story'::character varying, 'task'::character varying]::text[]))",f,f,t
+public,tasks,fk_task_backlog,FOREIGN KEY,FOREIGN KEY (backlog_id) REFERENCES backlogs(id),f,f,t
+public,tasks,fk_task_parent_same_backlog,FOREIGN KEY,"FOREIGN KEY (backlog_id, parent_task_id) REFERENCES tasks(backlog_id, id) DEFERRABLE",t,f,t
+public,tasks,tasks_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t
+public,tasks,uq_task_backlog_id,UNIQUE,"UNIQUE (backlog_id, id)",f,f,t
+public,users,ck_users_email_trimmed,CHECK,CHECK (length(btrim(email::text)) > 0 AND email::text = btrim(email::text)),f,f,t
+public,users,ck_users_hash_nonempty,CHECK,CHECK (length(btrim(password_hash)) > 0),f,f,t
+public,users,ck_users_name_nonempty,CHECK,CHECK (length(btrim(display_name::text)) > 0),f,f,t
+public,users,ck_users_timestamps,CHECK,CHECK (updated_at >= created_at),f,f,t
+public,users,users_pkey,PRIMARY KEY,PRIMARY KEY (id),f,f,t

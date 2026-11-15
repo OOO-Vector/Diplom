@@ -1,0 +1,534 @@
+// Team AI Orchestrator — actual PostgreSQL schema
+// Generated from columns.csv, constraints.csv, relationships.csv exported on 2026-11-15.
+// 27 tables, 230 columns, 55 foreign keys. Source of truth: Liquibase migrations.
+// DBML focuses on the logical structure. CHECK constraints, triggers, partial/expression
+// indexes, DB views and PostgreSQL roles are documented separately in Data Dictionary.
+
+Project Team_AI_Orchestrator {
+  database_type: 'PostgreSQL'
+  Note: 'Actual schema from PostgreSQL 16.16. Includes composite keys and foreign keys.'
+}
+
+// ===== Core & Access =====
+Table users {
+  id uuid [pk, not null]
+  email varchar(254) [not null]
+  password_hash text [not null]
+  display_name varchar(100) [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table projects {
+  id uuid [pk, not null]
+  name varchar(150) [not null]
+  description text
+  created_by uuid [not null]
+  status varchar(20) [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table project_members {
+  project_id uuid [not null]
+  user_id uuid [not null]
+  role varchar(20) [not null]
+  joined_at timestamptz [not null]
+
+  indexes {
+    (project_id, user_id) [pk]
+  }
+}
+
+
+// ===== Planning =====
+Table specifications {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  uploaded_by uuid [not null]
+  version integer [not null]
+  title varchar(200) [not null]
+  original_filename varchar(255)
+  content text [not null]
+  status varchar(20) [not null, default: 'uploaded']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+    (project_id, version) [unique]
+  }
+}
+
+Table backlogs {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  specification_id uuid [not null]
+  version integer [not null]
+  status varchar(20) [not null, default: 'draft']
+  created_at timestamptz [not null, default: `now()`]
+  approved_at timestamptz
+
+  indexes {
+    (specification_id, version) [unique]
+    (project_id, id) [unique]
+  }
+}
+
+Table tasks {
+  id uuid [pk, not null]
+  backlog_id uuid [not null]
+  parent_task_id uuid
+  task_type varchar(12) [not null]
+  title varchar(250) [not null]
+  description text
+  acceptance_criteria text
+  status varchar(20) [not null, default: 'draft']
+  priority smallint [not null, default: 3]
+  sort_order integer [not null, default: 0]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (backlog_id, id) [unique]
+  }
+}
+
+Table task_dependencies {
+  backlog_id uuid [not null]
+  blocking_task_id uuid [not null]
+  blocked_task_id uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (backlog_id, blocking_task_id, blocked_task_id) [pk]
+  }
+}
+
+
+// ===== Shared & Project & Memory =====
+Table architectural_decisions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  decision_key varchar(80) [not null]
+  title varchar(250) [not null]
+  status varchar(20) [not null, default: 'proposed']
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+    (project_id, decision_key) [unique]
+  }
+}
+
+Table decision_versions {
+  id uuid [pk, not null]
+  decision_id uuid [not null]
+  version integer [not null]
+  context_text text [not null]
+  decision_text text [not null]
+  rationale text
+  consequences text
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (decision_id, version) [unique]
+    (decision_id, id) [unique]
+  }
+}
+
+Table decision_resolutions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  decision_id uuid [not null]
+  related_decision_id uuid [not null]
+  resolution_type varchar(20) [not null]
+  status varchar(20) [not null, default: 'pending']
+  resolution_notes text
+  resolved_by uuid
+  resolved_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table knowledge_sources {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  source_type varchar(20) [not null]
+  specification_id uuid
+  decision_id uuid
+  title varchar(250) [not null]
+  source_uri text
+  content_hash varchar(128)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table knowledge_chunks {
+  id uuid [pk, not null]
+  source_id uuid [not null]
+  chunk_index integer [not null]
+  content text [not null]
+  embedding vector
+  embedding_model varchar(150)
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (source_id, chunk_index) [unique]
+    (source_id, id) [unique]
+  }
+}
+
+
+// ===== GitHub & Integration =====
+Table github_connections {
+  id uuid [pk, not null]
+  project_id uuid [not null, unique]
+  connected_by uuid [not null]
+  installation_id bigint [not null]
+  repository_id bigint [not null]
+  repository_owner varchar(100) [not null]
+  repository_name varchar(100) [not null]
+  status varchar(20) [not null, default: 'active']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table github_issues {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  connection_id uuid [not null]
+  backlog_id uuid [not null]
+  task_id uuid [not null]
+  github_issue_id bigint
+  github_issue_number integer
+  github_issue_url text
+  sync_status varchar(20) [not null, default: 'pending']
+  last_error text
+  last_synced_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (connection_id, task_id) [unique]
+  }
+}
+
+
+// ===== AI & Chat =====
+Table ai_operations {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  initiated_by uuid [not null]
+  operation_type varchar(30) [not null]
+  status varchar(20) [not null, default: 'queued']
+  provider varchar(80)
+  model_name varchar(100)
+  input_tokens integer
+  output_tokens integer
+  duration_ms bigint
+  created_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  finished_at timestamptz
+  error_message text
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_sessions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  created_by uuid [not null]
+  title varchar(255)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_messages {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  session_id uuid [not null]
+  author_id uuid
+  ai_operation_id uuid
+  sender varchar(20) [not null]
+  content text [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+  }
+}
+
+Table chat_message_sources {
+  project_id uuid [not null]
+  message_id uuid [not null]
+  source_id uuid [not null]
+  chunk_id uuid [not null]
+  citation_order integer [not null]
+
+  indexes {
+    (message_id, chunk_id) [pk]
+    (message_id, citation_order) [unique]
+  }
+}
+
+
+// ===== Conflict & Detection & ML =====
+Table ml_datasets {
+  id uuid [pk, not null]
+  name varchar(100) [not null]
+  version varchar(50) [not null]
+  description text
+  origin varchar(50) [not null]
+  content_sha256 varchar(64) [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (name, version) [unique]
+  }
+}
+
+Table ml_training_examples {
+  id uuid [pk, not null]
+  dataset_id uuid [not null]
+  statement_a text [not null]
+  statement_b text [not null]
+  pair_sha256 varchar(64) [not null]
+  expected_label varchar(20) [not null]
+  data_split varchar(12) [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (dataset_id, pair_sha256) [unique]
+  }
+}
+
+Table ml_models {
+  id uuid [pk, not null]
+  dataset_id uuid [not null]
+  name varchar(100) [not null]
+  version varchar(50) [not null]
+  model_type varchar(50) [not null]
+  algorithm varchar(100) [not null]
+  artifact_uri text [not null]
+  artifact_sha256 varchar(64) [not null]
+  training_config jsonb [not null]
+  training_seed integer
+  precision_score numeric(5,4)
+  recall_score numeric(5,4)
+  f1_score numeric(5,4)
+  trained_at timestamptz [not null]
+  is_active boolean [not null, default: false]
+
+  indexes {
+    (name, version) [unique]
+  }
+}
+
+Table conflict_checks {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  proposed_decision_id uuid [not null]
+  proposed_version_id uuid [not null]
+  ai_operation_id uuid
+  result varchar(30) [not null]
+  explanation text
+  checked_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+    (proposed_version_id, id) [unique]
+  }
+}
+
+Table conflict_evidence {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  conflict_check_id uuid [not null]
+  related_decision_id uuid [not null]
+  decision_version_id uuid [not null]
+  evidence_text text [not null]
+
+  indexes {
+    (conflict_check_id, decision_version_id) [unique]
+  }
+}
+
+Table ml_predictions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  conflict_check_id uuid [not null]
+  compared_decision_id uuid [not null]
+  compared_version_id uuid [not null]
+  model_id uuid [not null]
+  prediction varchar(20) [not null]
+  confidence_score numeric(5,4)
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (conflict_check_id, compared_version_id, model_id) [unique]
+  }
+}
+
+
+// ===== Analytics & Events =====
+Table review_events {
+  id uuid [pk, not null]
+  ai_operation_id uuid [not null]
+  reviewer_id uuid [not null]
+  outcome varchar(20) [not null]
+  duration_ms bigint
+  corrections_count integer [not null, default: 0]
+  reviewed_at timestamptz [not null, default: `now()`]
+}
+
+Table activity_events {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  actor_id uuid
+  event_type varchar(100) [not null]
+  entity_type varchar(50)
+  entity_id uuid
+  occurred_at timestamptz [not null, default: `now()`]
+}
+
+Table outbox_events {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  event_type varchar(100) [not null]
+  aggregate_type varchar(50) [not null]
+  aggregate_id uuid [not null]
+  deduplication_key varchar(150)
+  payload jsonb [not null]
+  status varchar(20) [not null, default: 'pending']
+  created_at timestamptz [not null, default: `now()`]
+  next_attempt_at timestamptz [not null, default: `now()`]
+  processed_at timestamptz
+  retry_count integer [not null, default: 0]
+  last_error text
+
+  indexes {
+    (project_id, deduplication_key) [unique]
+  }
+}
+
+
+Ref: activity_events.actor_id > users.id // fk_activity_actor
+Ref: activity_events.project_id > projects.id // fk_activity_project
+Ref: ai_operations.initiated_by > users.id // fk_ai_operations_initiator
+Ref: ai_operations.project_id > projects.id // fk_ai_operations_project
+Ref: architectural_decisions.created_by > users.id // fk_decision_creator
+Ref: architectural_decisions.project_id > projects.id // fk_decision_project
+Ref: backlogs.(project_id, specification_id) > specifications.(project_id, id) // fk_backlog_spec_project
+Ref: chat_message_sources.(source_id, chunk_id) > knowledge_chunks.(source_id, id) // fk_citations_chunk_source
+Ref: chat_message_sources.(project_id, message_id) > chat_messages.(project_id, id) [delete: cascade] // fk_citations_message
+Ref: chat_message_sources.(project_id, source_id) > knowledge_sources.(project_id, id) // fk_citations_source
+Ref: chat_messages.author_id > users.id // fk_chat_messages_author
+Ref: chat_messages.(project_id, ai_operation_id) > ai_operations.(project_id, id) // fk_chat_messages_operation
+Ref: chat_messages.(project_id, session_id) > chat_sessions.(project_id, id) // fk_chat_messages_session
+Ref: chat_sessions.created_by > users.id // fk_chat_sessions_creator
+Ref: chat_sessions.project_id > projects.id // fk_chat_sessions_project
+Ref: conflict_checks.(project_id, ai_operation_id) > ai_operations.(project_id, id) // fk_conflict_operation
+Ref: conflict_checks.project_id > projects.id // fk_conflict_project
+Ref: conflict_checks.(project_id, proposed_decision_id) > architectural_decisions.(project_id, id) // fk_conflict_proposed_decision
+Ref: conflict_checks.(proposed_decision_id, proposed_version_id) > decision_versions.(decision_id, id) // fk_conflict_proposed_version
+Ref: conflict_evidence.(project_id, conflict_check_id) > conflict_checks.(project_id, id) [delete: cascade] // fk_evidence_check
+Ref: conflict_evidence.(project_id, related_decision_id) > architectural_decisions.(project_id, id) // fk_evidence_decision
+Ref: conflict_evidence.(related_decision_id, decision_version_id) > decision_versions.(decision_id, id) // fk_evidence_version
+Ref: decision_resolutions.(project_id, decision_id) > architectural_decisions.(project_id, id) // fk_resolution_decision
+Ref: decision_resolutions.project_id > projects.id // fk_resolution_project
+Ref: decision_resolutions.(project_id, related_decision_id) > architectural_decisions.(project_id, id) // fk_resolution_related
+Ref: decision_resolutions.resolved_by > users.id // fk_resolution_user
+Ref: decision_versions.created_by > users.id // fk_decision_version_author
+Ref: decision_versions.decision_id > architectural_decisions.id // fk_decision_version_decision
+Ref: github_connections.project_id > projects.id // fk_github_connection_project
+Ref: github_connections.connected_by > users.id // fk_github_connection_user
+Ref: github_issues.(project_id, backlog_id) > backlogs.(project_id, id) // fk_github_issue_backlog_same_project
+Ref: github_issues.(project_id, connection_id) > github_connections.(project_id, id) // fk_github_issue_connection_same_project
+Ref: github_issues.(backlog_id, task_id) > tasks.(backlog_id, id) // fk_github_issue_task_same_backlog
+Ref: knowledge_chunks.source_id > knowledge_sources.id [delete: cascade] // fk_chunk_source
+Ref: knowledge_sources.(project_id, decision_id) > architectural_decisions.(project_id, id) // fk_knowledge_decision
+Ref: knowledge_sources.project_id > projects.id // fk_knowledge_project
+Ref: knowledge_sources.(project_id, specification_id) > specifications.(project_id, id) // fk_knowledge_spec
+Ref: ml_models.dataset_id > ml_datasets.id // fk_ml_models_dataset
+Ref: ml_predictions.(project_id, conflict_check_id) > conflict_checks.(project_id, id) [delete: cascade] // fk_prediction_check
+Ref: ml_predictions.(project_id, compared_decision_id) > architectural_decisions.(project_id, id) // fk_prediction_decision
+Ref: ml_predictions.model_id > ml_models.id // fk_prediction_model
+Ref: ml_predictions.(compared_decision_id, compared_version_id) > decision_versions.(decision_id, id) // fk_prediction_version
+Ref: ml_training_examples.dataset_id > ml_datasets.id // fk_ml_examples_dataset
+Ref: outbox_events.project_id > projects.id // fk_outbox_project
+Ref: project_members.project_id > projects.id // fk_project_members_project
+Ref: project_members.user_id > users.id // fk_project_members_user
+Ref: projects.created_by > users.id // fk_projects_created_by
+Ref: review_events.ai_operation_id > ai_operations.id // fk_review_operation
+Ref: review_events.reviewer_id > users.id // fk_review_reviewer
+Ref: specifications.project_id > projects.id // fk_spec_project
+Ref: specifications.uploaded_by > users.id // fk_spec_uploader
+Ref: task_dependencies.(backlog_id, blocked_task_id) > tasks.(backlog_id, id) [delete: cascade] // fk_dep_blocked_same_backlog
+Ref: task_dependencies.(backlog_id, blocking_task_id) > tasks.(backlog_id, id) [delete: cascade] // fk_dep_blocking_same_backlog
+Ref: tasks.backlog_id > backlogs.id // fk_task_backlog
+Ref: tasks.(backlog_id, parent_task_id) > tasks.(backlog_id, id) // fk_task_parent_same_backlog
+
+TableGroup Core_Access {
+  users
+  projects
+  project_members
+}
+
+TableGroup Planning {
+  specifications
+  backlogs
+  tasks
+  task_dependencies
+}
+
+TableGroup Shared_Project_Memory {
+  architectural_decisions
+  decision_versions
+  decision_resolutions
+  knowledge_sources
+  knowledge_chunks
+}
+
+TableGroup GitHub_Integration {
+  github_connections
+  github_issues
+}
+
+TableGroup AI_Chat {
+  ai_operations
+  chat_sessions
+  chat_messages
+  chat_message_sources
+}
+
+TableGroup Conflict_Detection_ML {
+  ml_datasets
+  ml_training_examples
+  ml_models
+  conflict_checks
+  conflict_evidence
+  ml_predictions
+}
+
+TableGroup Analytics_Events {
+  review_events
+  activity_events
+  outbox_events
+}

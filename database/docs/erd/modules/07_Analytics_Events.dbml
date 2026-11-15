@@ -1,0 +1,58 @@
+// Team AI Orchestrator | 07 Analytics Events
+// Generated from actual PostgreSQL schema export, 2026-11-15.
+// 3 tables, 0 internal FK constraints, 5 external FK constraints.
+// Module view shows only internal FK lines, to keep diagram readable.
+// All external FK relationships are preserved in the complete full-schema.dbml.
+// DBML does not fully encode CHECK, trigger, RLS, and PostgreSQL-specific index expressions.
+
+Project Team_AI_07_Analytics_Events {
+  database_type: 'PostgreSQL'
+}
+
+Table review_events {
+  id uuid [pk, not null]
+  ai_operation_id uuid [not null]
+  reviewer_id uuid [not null]
+  outcome varchar(20) [not null]
+  duration_ms bigint
+  corrections_count integer [not null, default: 0]
+  reviewed_at timestamptz [not null, default: `now()`]
+}
+
+Table activity_events {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  actor_id uuid
+  event_type varchar(100) [not null]
+  entity_type varchar(50)
+  entity_id uuid
+  occurred_at timestamptz [not null, default: `now()`]
+}
+
+Table outbox_events {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  event_type varchar(100) [not null]
+  aggregate_type varchar(50) [not null]
+  aggregate_id uuid [not null]
+  deduplication_key varchar(150)
+  payload jsonb [not null]
+  status varchar(20) [not null, default: 'pending']
+  created_at timestamptz [not null, default: `now()`]
+  next_attempt_at timestamptz [not null, default: `now()`]
+  processed_at timestamptz
+  retry_count integer [not null, default: 0]
+  last_error text
+
+  indexes {
+    (project_id, deduplication_key) [unique]
+  }
+}
+
+
+// External foreign keys (visible on full diagram):
+// activity_events.(actor_id) -> users.(id) [fk_activity_actor]
+// activity_events.(project_id) -> projects.(id) [fk_activity_project]
+// outbox_events.(project_id) -> projects.(id) [fk_outbox_project]
+// review_events.(ai_operation_id) -> ai_operations.(id) [fk_review_operation]
+// review_events.(reviewer_id) -> users.(id) [fk_review_reviewer]

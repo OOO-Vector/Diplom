@@ -1,0 +1,38 @@
+Pager usage is off.
+BEGIN
+CREATE INDEX
+CREATE INDEX
+=== Q1: tasks with candidate index ===
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..18.64 rows=50 width=51) (actual time=0.031..0.070 rows=50 loops=1)
+   Output: id, title, status, priority, sort_order
+   Buffers: shared hit=9 read=3
+   ->  Index Scan using ix_tasks_backlog_status_order_test on public.tasks  (cost=0.29..881.28 rows=2400 width=51) (actual time=0.030..0.064 rows=50 loops=1)
+         Output: id, title, status, priority, sort_order
+         Index Cond: ((tasks.backlog_id = '00000000-0000-4000-8000-00000000f031'::uuid) AND ((tasks.status)::text = 'ready'::text))
+         Buffers: shared hit=9 read=3
+ Planning:
+   Buffers: shared hit=114 read=1
+ Planning Time: 0.433 ms
+ Execution Time: 0.093 ms
+(11 rows)
+
+=== Q2: decisions with candidate index ===
+                                                                                     QUERY PLAN                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..21.43 rows=100 width=71) (actual time=0.020..0.082 rows=100 loops=1)
+   Output: id, decision_key, title, updated_at
+   Buffers: shared hit=100 read=2
+   ->  Index Scan using ix_decisions_project_status_order_test on public.architectural_decisions  (cost=0.28..158.91 rows=750 width=71) (actual time=0.019..0.076 rows=100 loops=1)
+         Output: id, decision_key, title, updated_at
+         Index Cond: ((architectural_decisions.project_id = '00000000-0000-4000-8000-00000000f011'::uuid) AND ((architectural_decisions.status)::text = 'accepted'::text))
+         Buffers: shared hit=100 read=2
+ Planning:
+   Buffers: shared hit=104 read=1
+ Planning Time: 0.270 ms
+ Execution Time: 0.092 ms
+(11 rows)
+
+ROLLBACK
+Index experiment finished: candidate indexes rolled back.

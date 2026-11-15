@@ -1,0 +1,122 @@
+// Team AI Orchestrator | 06 Conflict Detection ML
+// Generated from actual PostgreSQL schema export, 2026-11-15.
+// 6 tables, 5 internal FK constraints, 8 external FK constraints.
+// Module view shows only internal FK lines, to keep diagram readable.
+// All external FK relationships are preserved in the complete full-schema.dbml.
+// DBML does not fully encode CHECK, trigger, RLS, and PostgreSQL-specific index expressions.
+
+Project Team_AI_06_Conflict_Detection_ML {
+  database_type: 'PostgreSQL'
+}
+
+Table ml_datasets {
+  id uuid [pk, not null]
+  name varchar(100) [not null]
+  version varchar(50) [not null]
+  description text
+  origin varchar(50) [not null]
+  content_sha256 varchar(64) [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (name, version) [unique]
+  }
+}
+
+Table ml_training_examples {
+  id uuid [pk, not null]
+  dataset_id uuid [not null]
+  statement_a text [not null]
+  statement_b text [not null]
+  pair_sha256 varchar(64) [not null]
+  expected_label varchar(20) [not null]
+  data_split varchar(12) [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (dataset_id, pair_sha256) [unique]
+  }
+}
+
+Table ml_models {
+  id uuid [pk, not null]
+  dataset_id uuid [not null]
+  name varchar(100) [not null]
+  version varchar(50) [not null]
+  model_type varchar(50) [not null]
+  algorithm varchar(100) [not null]
+  artifact_uri text [not null]
+  artifact_sha256 varchar(64) [not null]
+  training_config jsonb [not null]
+  training_seed integer
+  precision_score numeric(5,4)
+  recall_score numeric(5,4)
+  f1_score numeric(5,4)
+  trained_at timestamptz [not null]
+  is_active boolean [not null, default: false]
+
+  indexes {
+    (name, version) [unique]
+  }
+}
+
+Table conflict_checks {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  proposed_decision_id uuid [not null]
+  proposed_version_id uuid [not null]
+  ai_operation_id uuid
+  result varchar(30) [not null]
+  explanation text
+  checked_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (project_id, id) [unique]
+    (proposed_version_id, id) [unique]
+  }
+}
+
+Table conflict_evidence {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  conflict_check_id uuid [not null]
+  related_decision_id uuid [not null]
+  decision_version_id uuid [not null]
+  evidence_text text [not null]
+
+  indexes {
+    (conflict_check_id, decision_version_id) [unique]
+  }
+}
+
+Table ml_predictions {
+  id uuid [pk, not null]
+  project_id uuid [not null]
+  conflict_check_id uuid [not null]
+  compared_decision_id uuid [not null]
+  compared_version_id uuid [not null]
+  model_id uuid [not null]
+  prediction varchar(20) [not null]
+  confidence_score numeric(5,4)
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (conflict_check_id, compared_version_id, model_id) [unique]
+  }
+}
+
+Ref: conflict_evidence.(project_id, conflict_check_id) > conflict_checks.(project_id, id) [delete: cascade] // fk_evidence_check
+Ref: ml_models.dataset_id > ml_datasets.id // fk_ml_models_dataset
+Ref: ml_predictions.(project_id, conflict_check_id) > conflict_checks.(project_id, id) [delete: cascade] // fk_prediction_check
+Ref: ml_predictions.model_id > ml_models.id // fk_prediction_model
+Ref: ml_training_examples.dataset_id > ml_datasets.id // fk_ml_examples_dataset
+
+// External foreign keys (visible on full diagram):
+// conflict_checks.(project_id, ai_operation_id) -> ai_operations.(project_id, id) [fk_conflict_operation]
+// conflict_checks.(project_id) -> projects.(id) [fk_conflict_project]
+// conflict_checks.(project_id, proposed_decision_id) -> architectural_decisions.(project_id, id) [fk_conflict_proposed_decision]
+// conflict_checks.(proposed_decision_id, proposed_version_id) -> decision_versions.(decision_id, id) [fk_conflict_proposed_version]
+// conflict_evidence.(project_id, related_decision_id) -> architectural_decisions.(project_id, id) [fk_evidence_decision]
+// conflict_evidence.(related_decision_id, decision_version_id) -> decision_versions.(decision_id, id) [fk_evidence_version]
+// ml_predictions.(project_id, compared_decision_id) -> architectural_decisions.(project_id, id) [fk_prediction_decision]
+// ml_predictions.(compared_decision_id, compared_version_id) -> decision_versions.(decision_id, id) [fk_prediction_version]

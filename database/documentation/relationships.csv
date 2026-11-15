@@ -1,0 +1,56 @@
+source_table,fk_name,source_columns,referenced_table,referenced_columns,definition
+activity_events,fk_activity_actor,actor_id,users,id,FOREIGN KEY (actor_id) REFERENCES users(id)
+activity_events,fk_activity_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+ai_operations,fk_ai_operations_initiator,initiated_by,users,id,FOREIGN KEY (initiated_by) REFERENCES users(id)
+ai_operations,fk_ai_operations_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+architectural_decisions,fk_decision_creator,created_by,users,id,FOREIGN KEY (created_by) REFERENCES users(id)
+architectural_decisions,fk_decision_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+backlogs,fk_backlog_spec_project,"project_id, specification_id",specifications,"project_id, id","FOREIGN KEY (project_id, specification_id) REFERENCES specifications(project_id, id)"
+chat_message_sources,fk_citations_chunk_source,"source_id, chunk_id",knowledge_chunks,"source_id, id","FOREIGN KEY (source_id, chunk_id) REFERENCES knowledge_chunks(source_id, id)"
+chat_message_sources,fk_citations_message,"project_id, message_id",chat_messages,"project_id, id","FOREIGN KEY (project_id, message_id) REFERENCES chat_messages(project_id, id) ON DELETE CASCADE"
+chat_message_sources,fk_citations_source,"project_id, source_id",knowledge_sources,"project_id, id","FOREIGN KEY (project_id, source_id) REFERENCES knowledge_sources(project_id, id)"
+chat_messages,fk_chat_messages_author,author_id,users,id,FOREIGN KEY (author_id) REFERENCES users(id)
+chat_messages,fk_chat_messages_operation,"project_id, ai_operation_id",ai_operations,"project_id, id","FOREIGN KEY (project_id, ai_operation_id) REFERENCES ai_operations(project_id, id)"
+chat_messages,fk_chat_messages_session,"project_id, session_id",chat_sessions,"project_id, id","FOREIGN KEY (project_id, session_id) REFERENCES chat_sessions(project_id, id)"
+chat_sessions,fk_chat_sessions_creator,created_by,users,id,FOREIGN KEY (created_by) REFERENCES users(id)
+chat_sessions,fk_chat_sessions_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+conflict_checks,fk_conflict_operation,"project_id, ai_operation_id",ai_operations,"project_id, id","FOREIGN KEY (project_id, ai_operation_id) REFERENCES ai_operations(project_id, id)"
+conflict_checks,fk_conflict_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+conflict_checks,fk_conflict_proposed_decision,"project_id, proposed_decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, proposed_decision_id) REFERENCES architectural_decisions(project_id, id)"
+conflict_checks,fk_conflict_proposed_version,"proposed_decision_id, proposed_version_id",decision_versions,"decision_id, id","FOREIGN KEY (proposed_decision_id, proposed_version_id) REFERENCES decision_versions(decision_id, id)"
+conflict_evidence,fk_evidence_check,"project_id, conflict_check_id",conflict_checks,"project_id, id","FOREIGN KEY (project_id, conflict_check_id) REFERENCES conflict_checks(project_id, id) ON DELETE CASCADE"
+conflict_evidence,fk_evidence_decision,"project_id, related_decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, related_decision_id) REFERENCES architectural_decisions(project_id, id)"
+conflict_evidence,fk_evidence_version,"related_decision_id, decision_version_id",decision_versions,"decision_id, id","FOREIGN KEY (related_decision_id, decision_version_id) REFERENCES decision_versions(decision_id, id)"
+decision_resolutions,fk_resolution_decision,"project_id, decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, decision_id) REFERENCES architectural_decisions(project_id, id)"
+decision_resolutions,fk_resolution_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+decision_resolutions,fk_resolution_related,"project_id, related_decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, related_decision_id) REFERENCES architectural_decisions(project_id, id)"
+decision_resolutions,fk_resolution_user,resolved_by,users,id,FOREIGN KEY (resolved_by) REFERENCES users(id)
+decision_versions,fk_decision_version_author,created_by,users,id,FOREIGN KEY (created_by) REFERENCES users(id)
+decision_versions,fk_decision_version_decision,decision_id,architectural_decisions,id,FOREIGN KEY (decision_id) REFERENCES architectural_decisions(id)
+github_connections,fk_github_connection_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+github_connections,fk_github_connection_user,connected_by,users,id,FOREIGN KEY (connected_by) REFERENCES users(id)
+github_issues,fk_github_issue_backlog_same_project,"project_id, backlog_id",backlogs,"project_id, id","FOREIGN KEY (project_id, backlog_id) REFERENCES backlogs(project_id, id)"
+github_issues,fk_github_issue_connection_same_project,"project_id, connection_id",github_connections,"project_id, id","FOREIGN KEY (project_id, connection_id) REFERENCES github_connections(project_id, id)"
+github_issues,fk_github_issue_task_same_backlog,"backlog_id, task_id",tasks,"backlog_id, id","FOREIGN KEY (backlog_id, task_id) REFERENCES tasks(backlog_id, id)"
+knowledge_chunks,fk_chunk_source,source_id,knowledge_sources,id,FOREIGN KEY (source_id) REFERENCES knowledge_sources(id) ON DELETE CASCADE
+knowledge_sources,fk_knowledge_decision,"project_id, decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, decision_id) REFERENCES architectural_decisions(project_id, id)"
+knowledge_sources,fk_knowledge_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+knowledge_sources,fk_knowledge_spec,"project_id, specification_id",specifications,"project_id, id","FOREIGN KEY (project_id, specification_id) REFERENCES specifications(project_id, id)"
+ml_models,fk_ml_models_dataset,dataset_id,ml_datasets,id,FOREIGN KEY (dataset_id) REFERENCES ml_datasets(id)
+ml_predictions,fk_prediction_check,"project_id, conflict_check_id",conflict_checks,"project_id, id","FOREIGN KEY (project_id, conflict_check_id) REFERENCES conflict_checks(project_id, id) ON DELETE CASCADE"
+ml_predictions,fk_prediction_decision,"project_id, compared_decision_id",architectural_decisions,"project_id, id","FOREIGN KEY (project_id, compared_decision_id) REFERENCES architectural_decisions(project_id, id)"
+ml_predictions,fk_prediction_model,model_id,ml_models,id,FOREIGN KEY (model_id) REFERENCES ml_models(id)
+ml_predictions,fk_prediction_version,"compared_decision_id, compared_version_id",decision_versions,"decision_id, id","FOREIGN KEY (compared_decision_id, compared_version_id) REFERENCES decision_versions(decision_id, id)"
+ml_training_examples,fk_ml_examples_dataset,dataset_id,ml_datasets,id,FOREIGN KEY (dataset_id) REFERENCES ml_datasets(id)
+outbox_events,fk_outbox_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+project_members,fk_project_members_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+project_members,fk_project_members_user,user_id,users,id,FOREIGN KEY (user_id) REFERENCES users(id)
+projects,fk_projects_created_by,created_by,users,id,FOREIGN KEY (created_by) REFERENCES users(id)
+review_events,fk_review_operation,ai_operation_id,ai_operations,id,FOREIGN KEY (ai_operation_id) REFERENCES ai_operations(id)
+review_events,fk_review_reviewer,reviewer_id,users,id,FOREIGN KEY (reviewer_id) REFERENCES users(id)
+specifications,fk_spec_project,project_id,projects,id,FOREIGN KEY (project_id) REFERENCES projects(id)
+specifications,fk_spec_uploader,uploaded_by,users,id,FOREIGN KEY (uploaded_by) REFERENCES users(id)
+task_dependencies,fk_dep_blocked_same_backlog,"backlog_id, blocked_task_id",tasks,"backlog_id, id","FOREIGN KEY (backlog_id, blocked_task_id) REFERENCES tasks(backlog_id, id) ON DELETE CASCADE"
+task_dependencies,fk_dep_blocking_same_backlog,"backlog_id, blocking_task_id",tasks,"backlog_id, id","FOREIGN KEY (backlog_id, blocking_task_id) REFERENCES tasks(backlog_id, id) ON DELETE CASCADE"
+tasks,fk_task_backlog,backlog_id,backlogs,id,FOREIGN KEY (backlog_id) REFERENCES backlogs(id)
+tasks,fk_task_parent_same_backlog,"backlog_id, parent_task_id",tasks,"backlog_id, id","FOREIGN KEY (backlog_id, parent_task_id) REFERENCES tasks(backlog_id, id) DEFERRABLE"
