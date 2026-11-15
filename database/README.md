@@ -43,7 +43,7 @@ The initialization process creates three roles:
 
 Database schema creation and subsequent changes are managed through Liquibase migrations located in:
 
-`backend/src/main/resources/db/changelog/`
+`../backend/src/main/resources/db/changelog/`
 
 The application uses separate database credentials for administrative migrations and application access.
 
@@ -106,7 +106,7 @@ The fresh deployment verification confirmed:
 
 ## Documentation
 
-- `docs/Data_Dictionary.docx` — database entities, attributes, and constraints.
+- `docs/Team_AI_Orchestrator_Data_Dictionary.docx` — database entities, attributes, and constraints.
 - `docs/erd/` — full and modular ER diagrams, including DBML source files.
 - `docs/Database_Test_Report.md` — database testing and verification report.
 - `documentation/` — SQL scripts and CSV exports for schema documentation.

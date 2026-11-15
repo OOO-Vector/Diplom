@@ -8,7 +8,7 @@
 
 ## 1. Purpose and scope
 
-This report documents evidence collected during database development and verification. It addresses schema reproducibility, referential and business-rule integrity, access controls, concurrency handling, and query performance. The primary application database is `team_ai_db`. A separate database, `team_ai_repro_check`, was used for the clean-schema migration test, avoiding destructive changes to the development database.
+This report documents evidence collected during database development and verification. It addresses schema reproducibility, referential and business-rule integrity, access controls, concurrency handling, and query performance. The primary application database is `team_ai_db`. A separate database, `team_ai_repro_check`, was used for the clean-schema migration test. A second, fully independent PostgreSQL container (`team-ai-postgres-repro`, port 5434) and a fresh Docker volume were then used to verify clean infrastructure initialization. Both exercises avoided destructive changes to the development database.
 
 ## 2. Database design summary
 
@@ -40,9 +40,10 @@ The schema uses primary and foreign keys, CHECK and UNIQUE constraints, dedicate
 | Concurrent outbox claiming | Separate workers claimed different entries using `FOR UPDATE SKIP LOCKED` | Previously verified |
 | Schema audit | 27 tables; 55 foreign keys; 103 CHECK constraints; 27 PK constraints; 27 UNIQUE constraints; one reporting view | Previously verified |
 | Index validity | 0 invalid indexes in the recorded schema audit | Previously verified |
-| Fully clean Docker/server deployment | Not yet performed | PENDING |
+| Fresh Docker-volume deployment | New PostgreSQL container and volume; roles created automatically; 12 Liquibase migrations, 27 tables, pgvector and example privileges verified; Spring Boot started | PASS |
+| Deployment to an independently provisioned host | Not performed; distinct from the verified fresh-volume container test | NOT TESTED |
 
-**Evidence quality note:** The migration, extension, table-count, and example permission rows above were verified from actual command output on 15 November 2026. The test-suite, audit, and performance findings are prior development-session records; attach or commit the original output logs for independent review.
+**Evidence quality note:** The migration, extension, table-count, and example permission results, and the fresh-volume bootstrap, were confirmed using command output on 15 November 2026. The test-suite, audit, and performance findings are prior development-session records; attach or commit the original output logs for independent review.
 
 ## 4. Clean-schema reproducibility
 
@@ -112,9 +113,19 @@ SELECT
 
 Observed: `true | true | false`.
 
-### 4.3 Interpretation and limitation
+### 4.3 Interpretation and limitation of the first exercise
 
-These results establish that the schema, extension and migration history can be reconstructed in a new database **within an existing configured PostgreSQL container**. They do **not** by themselves establish that the PostgreSQL roles, server-level setup, secrets, Docker volume initialization, application runtime startup, or the entire deployment work from scratch on a new host. Those require a separate fresh-environment test.
+The first exercise established that the schema, extension and migration history could be reconstructed in a new database **within an existing configured PostgreSQL container**. The separate fresh-volume exercise documented below additionally verified database role initialization and application startup. These results do not establish deployment to a separate host or production readiness.
+
+### 4.4 Fresh PostgreSQL Docker-volume deployment (15 November 2026)
+
+An isolated `pgvector/pgvector:pg16` container (`team-ai-postgres-repro`) was provisioned with a newly created Docker volume and mapped to local port `5434`; the existing development container on port `5433` remained untouched. The `database/security/002-init-roles.sh` script was mounted under `/docker-entrypoint-initdb.d/`, using the application's password supplied through environment variables.
+
+The PostgreSQL startup log showed three `CREATE ROLE` operations, two `GRANT ROLE` operations, and `Database application roles initialized.` The Spring Boot backend was then started with its datasource and Liquibase URLs pointed at port `5434`. Liquibase reported all 12 changesets executed successfully, and the backend subsequently started. An initial backend startup attempt encountered an occupied HTTP port (`8081`); resolving that port conflict allowed application startup. This conflict did not affect the successful database migrations.
+
+The user-reported follow-up checks on the independent container confirmed **27 application tables**, **12 executed changesets**, **pgvector 0.8.7**, and example privilege values **`SELECT=true`, `INSERT=true`, `schema CREATE=false`** for `team_ai_app`. These observations verify clean-volume PostgreSQL setup, role initialization, schema migration, and application connection in the tested local environment.
+
+**Limitations:** This exercise was not a deployment to a separate machine or an independent production environment. Terminal command transcripts and fresh-environment logs should be archived if the assessor requires independent evidence of the run.
 
 ## 5. Integrity and automated SQL tests
 
@@ -190,13 +201,14 @@ The recorded execution plans indicated that the composite indexes can avoid unne
 ## 9. Remaining tasks
 
 - [ ] Preserve reproducibility and SQL-test terminal logs under `database/docs/evidence/` (remove credentials and personal data).
-- [ ] Verify a completely fresh Docker/server deployment, including creation of required PostgreSQL roles.
+- [x] Verify PostgreSQL initialization, role creation and migrations on a fresh isolated Docker volume (local environment).
+- [ ] Repeat deployment on an independent host if that is required for assessment or production readiness.
 - [ ] Execute and archive the full SQL-test suite against the fresh test database.
 - [ ] Re-run the full role audit against the fresh test database.
 - [ ] Re-run performance experiments with repeated trials and record `EXPLAIN (ANALYZE, BUFFERS)` plans.
 - [ ] Confirm the synthetic performance seed and concurrency fixtures have been cleaned from the development database where appropriate.
-- [ ] Check that `README.md` contains complete fresh-install and migration instructions.
+- [x] Check that the root `README.md` documents fresh local installation and migration instructions.
 
 ## 10. Conclusion
 
-The development verification results support the conclusion that the Team AI Orchestrator database has a functioning, versioned, reproducible schema and an established body of integrity, security and performance testing. The separate clean-schema exercise on 15 November 2026 successfully reconstructed all 27 domain tables through 12 executed Liquibase migrations and verified pgvector 0.8.7 and an example of restricted application access. A fully fresh infrastructure deployment and retained machine-readable evidence remain necessary for stronger reproducibility claims.
+The development verification results support the conclusion that the Team AI Orchestrator database has a functioning, versioned, reproducible schema and an established body of integrity, security and performance testing. The clean-schema exercise reconstructed all 27 domain tables through 12 executed Liquibase migrations and verified pgvector 0.8.7 and example application privileges. An additional fresh Docker-volume exercise on 15 November 2026 verified automatic role initialization, database migration and successful Spring Boot startup on an isolated PostgreSQL container. Independent-host deployment and retained machine-readable test transcripts remain outstanding for stronger reproducibility and production-readiness claims.
