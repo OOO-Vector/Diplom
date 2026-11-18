@@ -5,12 +5,10 @@
 
 **CONTENTS:**
 
-(1) Target audience and personas_\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\__3
-
-(2) Information architecture and navigation scheme_\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\__5  
-(3) Key interaction scenarios (User flows and CJM)\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\___9
-
-(4) Accessibility checklist_\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\_**\___\___14
+(1) Target audience and personas
+(2) Information architecture and navigation scheme
+(3) Key interaction scenarios (User flows and CJM)
+(4) Accessibility checklist
 
 **1\. TARGET AUDIENCE AND PERSONAS**
 
@@ -102,53 +100,53 @@ The user interface of the Team AI orchestrator follows a persistent three-tier l
 
 ├── 1. Left sidebar (Collapsible / Project management panel)
 
-│ ├── Workspace brand / Logo
+│     ├── Workspace brand / Logo
 
-│ ├── "Projects" section header
+│     ├── "Projects" section header
 
-│ ├── "+ New project" action button
+│     ├── "+ New project" action button
 
-│ ├── Project search bar
+│     ├── Project search bar
 
-│ └── Dynamic project list (Scrollable list of project items)
+│     └── Dynamic project list (Scrollable list of project items)
 
 ├── 2. Top header navigation (Contextual module bar)
 
-│ ├── Module switcher tabs:
+│     ├── Module switcher tabs:
 
-│ │ ├── \[TASKS\] (Backlog import, task hierarchy and DAG view)
+│     │     ├── \[TASKS\] (Backlog import, task hierarchy and DAG view)
 
-│ │ ├── \[DECISIONS\] (Shared project memory, decision proposals and conflict
+│     │     ├── \[DECISIONS\] (Shared project memory, decision proposals and conflict
 
-│ │ │ resolution)
+│     │     │                  resolution)
 
-│ │ ├── \[CHAT\] (Grounded RAG assistant and uploaded documents context)
+│     │     ├── \[CHAT\] (Grounded RAG assistant and uploaded documents context)
 
-│ │ ├── \[ANALYTICS\] (AI operation metrics and audit logs)
+│     │     ├── \[ANALYTICS\] (AI operation metrics and audit logs)
 
-│ │ └── \[SETTINGS\] (Project configuration, specs management and GitHub
+│     │     └── \[SETTINGS\] (Project configuration, specs management and GitHub
 
-│ │ integration)
+│     │                        integration)
 
-│ └── Right-hand utilities:
+│     └── Right-hand utilities:
 
-│ ├── Notifications / Mail icon (Alerts and system notifications)
+│           ├── Notifications / Mail icon (Alerts and system notifications)
 
-│ └── User profile / Account menu (Avatar, role, account settings)
+│           └── User profile / Account menu (Avatar, role, account settings)
 
 └── 3. Main content workspace area (Dynamic section views)
 
-├── SCR-01: Project dashboard and member management
+      ├── SCR-01: Project dashboard and member management
 
-├── SCR-02: Tasks and backlog generator / DAG workspace
+      ├── SCR-02: Tasks and backlog generator / DAG workspace
 
-├── SCR-03: Grounded RAG assistant and document context view (Chat interface)
+      ├── SCR-03: Grounded RAG assistant and document context view (Chat interface)
 
-├── SCR-04: AI operation analytics dashboard
+      ├── SCR-04: AI operation analytics dashboard
 
-├── SCR-05: Project settings and GitHub integration view
+      ├── SCR-05: Project settings and GitHub integration view
 
-└──SCR-06: Shared project memory and decisions
+      └──SCR-06: Shared project memory and decisions
 
 **Screen and navigation map details**
 
