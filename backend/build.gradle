@@ -58,3 +58,27 @@ tasks.register('securitySpike', Test) {
 	classpath = sourceSets.securitySpike.runtimeClasspath
 	useJUnitPlatform()
 }
+
+// Real migration tests in disposable PostgreSQL containers, without Spring app startup.
+sourceSets {
+	schemaTest {
+		resources.srcDir 'src/main/resources'
+	}
+}
+
+dependencies {
+	schemaTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+	schemaTestImplementation 'org.liquibase:liquibase-core'
+	schemaTestImplementation 'org.postgresql:postgresql'
+	schemaTestImplementation 'org.testcontainers:testcontainers-postgresql'
+	schemaTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('schemaTest', Test) {
+	description = 'Verifies Liquibase clean install, upgrade, refresh constraints and grants on PostgreSQL 16/pgvector.'
+	group = 'verification'
+	testClassesDirs = sourceSets.schemaTest.output.classesDirs
+	classpath = sourceSets.schemaTest.runtimeClasspath
+	useJUnitPlatform()
+	maxParallelForks = 1
+}

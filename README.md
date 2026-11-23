@@ -17,8 +17,8 @@ The project is being developed incrementally. **The PostgreSQL database foundati
 
 | Area | Status |
 | --- | --- |
-| PostgreSQL schema (27 application tables) | Implemented |
-| Liquibase schema migrations (12 changesets) | Implemented |
+| PostgreSQL schema (29 application tables after 013) | Implemented; CORE-01 pending review |
+| Liquibase schema migrations (13 changesets) | 001–012 baseline plus 013 refresh persistence |
 | Database roles, permissions, constraints, and indexes | Implemented |
 | SQL integrity tests, audits, and query benchmarks | Executed and documented |
 | Clean Docker-volume database initialization | Verified |
@@ -153,7 +153,7 @@ Run from any directory with access to Docker:
 docker exec team-ai-postgres psql -U team_ai_admin -d team_ai_db -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('databasechangelog', 'databasechangeloglock');"
 ```
 
-The expected result after Liquibase has run is **27** application tables.
+The expected result after Liquibase has run through 013 is **29** application tables (27 in the historical 001–012 baseline).
 
 To inspect the migration history:
 
@@ -161,7 +161,7 @@ To inspect the migration history:
 docker exec team-ai-postgres psql -U team_ai_admin -d team_ai_db -c "SELECT id, exectype FROM databasechangelog ORDER BY orderexecuted;"
 ```
 
-The expected history currently contains **12** executed changesets (`001`–`012`).
+The expected current history contains **13** executed changesets (`001`–`013`).
 
 > **Data safety:** Do not use `docker compose down -v` on the development stack unless you intentionally want to delete its persisted PostgreSQL data.
 
@@ -171,14 +171,14 @@ The current schema is organized into seven logical modules:
 
 | Module | Tables |
 | --- | ---: |
-| Core & Access | 3 |
+| Core & Access | 5 |
 | Planning | 4 |
 | Shared Project Memory | 5 |
 | GitHub Integration | 2 |
 | AI & Chat | 4 |
 | Conflict Detection & ML | 6 |
 | Analytics & Events | 3 |
-| **Total** | **27** |
+| **Total** | **29** |
 
 Database safeguards include foreign keys, unique and check constraints, project-ownership enforcement, cycle prevention for task dependencies, explicit application privileges, and indexes for frequently accessed queries.
 
@@ -189,12 +189,18 @@ For detailed design and evidence, see:
 - [Full ER diagram (PNG)](database/docs/erd/full-schema.png) and [DBML source](database/docs/erd/full-schema.dbml)
 - [Modular ER diagrams](database/docs/erd/modules/)
 - [Database test report](database/docs/Database_Test_Report.md)
+- [CORE-01 refresh schema, locking and verification](database/docs/CORE-01_Refresh_Sessions.md)
 
 ## Testing and Reproducibility
 
 Database development has included **78 SQL integrity checks**, schema and role audits, concurrency scenarios, and performance experiments. These tests are stored separately from the Java test suite in `database/tests/`.
 
 A clean PostgreSQL instance, initialized on a separate Docker volume, was used to verify automatic role setup, execution of all 12 migrations, creation of 27 tables, pgvector availability, application permissions, and successful Spring Boot startup.
+
+That historical result covers 001–012. For migration 013, run `gradlew.bat schemaTest` from `backend/`
+(JDK 21 and Docker required). It applies real Liquibase migrations on isolated PostgreSQL 16/pgvector Testcontainers,
+checks clean installation and a populated 001–012 upgrade, constraints, grants and family locking.
+It never starts the Spring application or connects to the configured development database. DB-014 and the full 78-check rerun remain separate work.
 
 For an **isolated** database-initialization check, the repository includes `compose.repro.yaml`, which binds PostgreSQL to port **5434** and uses a separate Docker volume. It is not the normal development environment. The database test report documents the recorded verification evidence and limitations.
 
