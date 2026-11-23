@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Team AI Orchestrator — Public REST API
   version: 0.1.0
-  description: Core & Access only. Proposed API-first contract; not implemented or deployed. See API_Overview.md.
-    All remaining MVP routes are added incrementally after review.
+  description: Core & Access API contract. CSRF bootstrap, registration, login and current user are implemented
+    for CORE-02/03 review; refresh, logout and project/member routes remain planned. Deployment is not claimed.
 servers:
 - url: http://localhost:8080
   description: Proposed local API (use same-origin HTTPS/proxy for secure cookie flows)
@@ -98,7 +98,7 @@ paths:
       - Authentication
       summary: Register a user
       description: Creates an active account, no session issued. CSRF required. Duplicate case-insensitive
-        email returns 409.
+        email returns 409. Request body is limited to 16 KiB; JSON scalar types are not coerced.
       operationId: register
       security:
       - csrfCookie: []
@@ -289,7 +289,7 @@ paths:
       - Authentication
       summary: Authenticate
       description: Valid active account creates independent refresh family and access JWT. Invalid credentials/inactive
-        account indistinguishable. CSRF required.
+        account indistinguishable. CSRF required. Request body is limited to 16 KiB; JSON scalar types are not coerced.
       operationId: login
       security:
       - csrfCookie: []

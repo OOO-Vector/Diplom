@@ -1,6 +1,6 @@
 # Security Design — Core baseline
 
-**Version:** 0.1.1 · **Status:** SET-01 review corrections; browser-only Origin policy and zero JWT clock skew approved for the current MVP. Remaining proposed details require review; production implementation is pending.
+**Version:** 0.1.2 · **Status:** CORE-02/03 implementation prepared for external review. Browser-only Origin policy and zero JWT clock skew retained. Refresh rotation/logout remain CORE-04.
 
 ## 1. Trust boundaries and threat model
 
@@ -45,5 +45,28 @@ Authenticate active user, scope `projectId` to membership, then validate object 
 | Logs | audit auth failures/replay/role changes/overrides with IDs, no sensitive payloads; retention policy TBD, no external telemetry by default |
 
 ## 6. Verification and open engineering checks
+
+CORE-02/03 implementation: registration, login, CSRF bootstrap and `/api/v1/users/me` use the existing database schema.
+Registration commits a salted Argon2id hash; duplicate `lower(email)` violations map to 409 even during concurrent inserts.
+Login does one Argon2 verification for existing, inactive and unknown accounts (a random startup dummy hash for unknown accounts),
+then rechecks active/hash state inside the issuance transaction. Both refresh rows and JWT signing must succeed before credentials
+leave the transaction. Initial issuance uses parameterized JDBC participating in the JPA transaction and app-role grants;
+rotation, replay processing and logout are not exposed by these controllers.
+
+Auth POST bodies are limited to 16 KiB before JSON parsing, including bodies without Content-Length. JSON unknown properties
+and scalar type coercion are rejected. Password bounds count Unicode code points and UTF-8 bytes; unpaired surrogates are invalid.
+NUL is rejected in display names because PostgreSQL text cannot store it; passwords are hashed without trimming/normalizing.
+The single-instance MVP limiter uses 60-second windows: register 5/IP, login 20/IP and 5/email (including unknown accounts).
+It returns 429 with Retry-After, bounds state to 10,000 keys and fails closed when full. It uses the servlet remote address,
+not caller-supplied X-Forwarded-For. A reverse proxy must have an explicitly reviewed trusted-client-IP configuration;
+otherwise all proxy clients share an IP budget. Limits are in-memory and reset at restart; multi-instance/shared limits require deployment work.
+
+Keys load from externally mounted PKCS#8/X.509 PEM resources; startup rejects malformed, mismatched or <2048-bit pairs.
+Issuer, audience, exact HTTPS origins and key ID are mandatory configuration (see root README). Only the configured public key
+and its kid are trusted; no token-supplied key URLs are fetched. This implementation supports one signing/verification key at a time:
+overlapping key-ring rotation remains an operational implementation gap, not a claimed capability. Keep clocks synchronized.
+The already documented zero-skew JWT boundary is enforced against an injected Clock for issuing and validation.
+HTTP auth integration is tested with MockMvc plus real PostgreSQL; deployed TLS, browser E2E, load/coverage and key rotation
+are separate verification gates. Existing SET-01 evidence remains historical.
 
 Test invalid JWT signature/issuer/audience/expiry, inactive account, duplicate email, CSRF mismatch, CORS disallowed origin, refresh concurrency/replay/expiry/logout, malformed inputs, lock race and scope/role. Validate isolation for retrieval/private chat/jobs, invalid webhook signature, AI injection, upload limits, rate limits, secret scans and clean DB grants. All defined access cases must reject; target ≥70% core backend line coverage (see SRS). No security certification is claimed. Confirm exact Spring Security JWT/Argon2/CSRF libraries through implementation spike; API key/model access, retention/privacy/provider terms, production domains/TLS/backup restore remain validation gates. Detailed QA cases by colleague.

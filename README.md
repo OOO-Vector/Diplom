@@ -23,11 +23,11 @@ The project is being developed incrementally. **The PostgreSQL database foundati
 | SQL integrity tests, audits, and query benchmarks | Executed and documented |
 | Clean Docker-volume database initialization | Verified |
 | Spring Boot application bootstrap and database connection | Verified |
-| Domain REST API and business services | Not yet implemented in this repository snapshot |
+| Registration, login, JWT and current user | CORE-02/03 implemented for external review; refresh rotation/logout remain CORE-04 |
 | GitHub synchronization, AI orchestration, project-memory services | Planned / not yet implemented |
 | Trainable ML component and end-user interface | Planned / not yet implemented |
 
-The current Spring Boot application is an infrastructure starting point, not a completed API or product. Its default Spring Security configuration is for development only.
+The application implements the initial Core authentication endpoints with explicit Spring Security configuration. Other domain APIs remain planned.
 
 ## Technology Stack
 
@@ -118,12 +118,15 @@ On the first startup with an empty Docker volume, `database/security/002-init-ro
 
 ### 3. Start the Backend
 
-The backend requires two environment variables in its process environment:
+The backend requires database and authentication configuration in its process environment:
 
 - `DB_PASSWORD`: the same administrative password as `POSTGRES_PASSWORD` in `.env`, used by Liquibase.
 - `DB_APP_PASSWORD`: the application database password from `.env`, used by Spring DataSource.
+- `APP_ALLOWED_ORIGINS`: comma-separated exact HTTPS origins without trailing slashes or paths.
+- `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_KEY_ID`: deployment-specific identifiers; no defaults.
+- `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`: Spring resource locations (`file:/...`) for an externally mounted PKCS#8 private PEM and X.509 public PEM, matching RSA keys of at least 2048 bits. Keep key files outside Git.
 
-**Important:** Spring Boot does not automatically load the root `.env` file in this setup. Set both variables in the terminal or your IDE run configuration before starting the backend.
+**Important:** Spring Boot does not automatically load the root `.env` file in this setup. Set all variables in the terminal or your IDE run configuration before starting the backend. The commands below show the database portion; authentication configuration above is also required. Use a same-origin HTTPS proxy for browser cookies.
 
 **Windows CMD** (from `backend/`):
 
@@ -192,6 +195,13 @@ For detailed design and evidence, see:
 - [CORE-01 refresh schema, locking and verification](database/docs/CORE-01_Refresh_Sessions.md)
 
 ## Testing and Reproducibility
+
+From `backend/`, run `gradlew.bat test securitySpike schemaTest bootJar --console=plain` (or `./gradlew` on Unix).
+`test` uses disposable PostgreSQL 16/pgvector through Testcontainers and the real migrations, with separate app/admin roles;
+it generates temporary RSA keys and credentials, independent of the local `.env` and development database.
+`securitySpike` is the isolated SET-01 library suite; `schemaTest` verifies clean install, 001–012 upgrade and 013 constraints/grants.
+Docker must be running. Reports remain local under `backend/build/reports/tests/` and are ignored by Git.
+These suites do not rerun all 78 historical SQL checks tracked separately by DB-014.
 
 Database development has included **78 SQL integrity checks**, schema and role audits, concurrency scenarios, and performance experiments. These tests are stored separately from the Java test suite in `database/tests/`.
 
