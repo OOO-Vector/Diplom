@@ -1,0 +1,2285 @@
+openapi: 3.0.3
+info:
+  title: Team AI Orchestrator — Public REST API
+  version: 0.1.0
+  description: Core & Access only. Proposed API-first contract; not implemented or deployed. See API_Overview.md.
+    All remaining MVP routes are added incrementally after review.
+servers:
+- url: http://localhost:8080
+  description: Proposed local API (use same-origin HTTPS/proxy for secure cookie flows)
+- url: /
+  description: Same-origin deployment
+tags:
+- name: Authentication
+- name: Users
+- name: Projects
+- name: Members
+paths:
+  /api/v1/auth/csrf:
+    get:
+      tags:
+      - Authentication
+      summary: Bootstrap CSRF protection
+      description: Same-origin browser obtains a header token and a matching HttpOnly cookie. Re-fetch after
+        login/logout or CSRF rejection. No bearer token needed.
+      operationId: getCsrfToken
+      security: []
+      x-requirements:
+      - DEC-02
+      - NFR-SEC-006
+      responses:
+        '200':
+          description: CSRF bootstrap
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+              example:
+                headerName: X-CSRF-Token
+                token: example-csrf-token
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+            Set-Cookie:
+              schema:
+                type: string
+              description: csrf_token; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a user
+      description: Creates an active account, no session issued. CSRF required. Duplicate case-insensitive
+        email returns 409.
+      operationId: register
+      security:
+      - csrfCookie: []
+        csrfHeader: []
+      x-requirements:
+      - FR-AUTH-001
+      - FR-AUTH-006
+      - BR-001
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                email: owner@example.test
+                displayName: Project Owner
+                isActive: true
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '403':
+          description: CSRF validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:csrf-invalid
+                title: CSRF validation failed
+                status: 403
+                code: CSRF_INVALID
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: CSRF validation failed
+        '409':
+          description: Email already registered
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:email-already-exists
+                title: Email already registered
+                status: 409
+                code: EMAIL_ALREADY_EXISTS
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Email already registered
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: owner@example.test
+              displayName: Project Owner
+              password: example-password-only
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate
+      description: Valid active account creates independent refresh family and access JWT. Invalid credentials/inactive
+        account indistinguishable. CSRF required.
+      operationId: login
+      security:
+      - csrfCookie: []
+        csrfHeader: []
+      x-requirements:
+      - FR-AUTH-002
+      - FR-AUTH-006
+      - DEC-02
+      responses:
+        '200':
+          description: Signed-in account and access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                accessToken: example-not-a-real-jwt
+                tokenType: Bearer
+                expiresIn: 900
+                user:
+                  id: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                  email: owner@example.test
+                  displayName: Project Owner
+                  isActive: true
+                  createdAt: '2026-11-17T12:00:00Z'
+                  updatedAt: '2026-11-17T12:00:00Z'
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+            Set-Cookie:
+              description: Refresh cookie issued/rotated with HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth.
+                CSRF cookie may be rotated/cleared separately. Multiple Set-Cookie header lines; not a comma-joined
+                list.
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:invalid-credentials
+                title: Invalid credentials
+                status: 401
+                code: INVALID_CREDENTIALS
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: CSRF validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:csrf-invalid
+                title: CSRF validation failed
+                status: 403
+                code: CSRF_INVALID
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: CSRF validation failed
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:service-unavailable
+                title: Service temporarily unavailable
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Service temporarily unavailable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: owner@example.test
+              password: example-password-only
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Rotate refresh credential
+      description: No JSON body. Atomically consume old refresh and issue replacement in the same family (absolute
+        7-day lifetime); replay revokes family. Do not blindly retry; on invalid/expired/replayed credential
+        clear cookie and return 401. Requires CSRF.
+      operationId: refresh
+      security:
+      - refreshCookie: []
+        csrfCookie: []
+        csrfHeader: []
+      x-requirements:
+      - FR-AUTH-002
+      - DEC-02
+      - FR-AUTH-003
+      responses:
+        '200':
+          description: Rotated credential and new access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                accessToken: example-not-a-real-jwt
+                tokenType: Bearer
+                expiresIn: 900
+                user:
+                  id: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                  email: owner@example.test
+                  displayName: Project Owner
+                  isActive: true
+                  createdAt: '2026-11-17T12:00:00Z'
+                  updatedAt: '2026-11-17T12:00:00Z'
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+            Set-Cookie:
+              description: Refresh cookie issued/rotated with HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth.
+                CSRF cookie may be rotated/cleared separately. Multiple Set-Cookie header lines; not a comma-joined
+                list.
+              schema:
+                type: string
+        '401':
+          description: Refresh credential invalid
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:refresh-invalid
+                title: Refresh credential invalid
+                status: 401
+                code: REFRESH_INVALID
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Refresh credential invalid
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: CSRF validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:csrf-invalid
+                title: CSRF validation failed
+                status: 403
+                code: CSRF_INVALID
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: CSRF validation failed
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:service-unavailable
+                title: Service temporarily unavailable
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Service temporarily unavailable
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Logout
+      description: Requires CSRF; refresh cookie optional. No request body, no bearer requirement. Existing
+        access JWT may remain valid until expiry; client clears it immediately.
+      operationId: logout
+      security:
+      - csrfCookie: []
+        csrfHeader: []
+      x-requirements:
+      - FR-AUTH-003
+      - DEC-02
+      responses:
+        '204':
+          description: Refresh family revoked if present; cookie cleared. Idempotent even when no valid refresh
+            cookie exists.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clear refresh_token with matching Path and attributes, Max-Age=0; clear/rotate CSRF
+                cookie as implemented.
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+        '403':
+          description: CSRF validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:csrf-invalid
+                title: CSRF validation failed
+                status: 403
+                code: CSRF_INVALID
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: CSRF validation failed
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:service-unavailable
+                title: Service temporarily unavailable
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Service temporarily unavailable
+  /api/v1/users/me:
+    get:
+      tags:
+      - Users
+      summary: Get current user
+      description: Authenticated active user; no credential fields returned.
+      operationId: getCurrentUser
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-AUTH-002
+      - FR-AUTH-006
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                email: owner@example.test
+                displayName: Project Owner
+                isActive: true
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+  /api/v1/projects:
+    get:
+      tags:
+      - Projects
+      summary: List accessible projects
+      description: Membership-only results including archived projects by default. Sort createdAt DESC, id
+        DESC. Page beyond result returns empty items with correct totals.
+      operationId: listProjects
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-002
+      - FR-AUTH-005
+      - NFR-PER-006
+      responses:
+        '200':
+          description: Project page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPage'
+              example:
+                items:
+                - id: 87ee2164-7607-494f-8806-04f9368edd62
+                  name: Pilot project
+                  description: Synthetic example
+                  createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                  status: active
+                  myRole: owner
+                  createdAt: '2026-11-17T12:00:00Z'
+                  updatedAt: '2026-11-17T12:00:00Z'
+                page: 0
+                size: 20
+                totalElements: 1
+                totalPages: 1
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: size
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - active
+          - archived
+    post:
+      tags:
+      - Projects
+      summary: Create project
+      description: Create project and sole owner membership atomically; client cannot supply role or creator.
+        Location identifies the created project.
+      operationId: createProject
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-001
+      - BR-002
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              example:
+                id: 87ee2164-7607-494f-8806-04f9368edd62
+                name: Pilot project
+                description: Synthetic example
+                createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                status: active
+                myRole: owner
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+          headers:
+            Location:
+              schema:
+                type: string
+              example: /api/v1/projects/87ee2164-7607-494f-8806-04f9368edd62
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            example:
+              name: Pilot project
+              description: Synthetic example
+  /api/v1/projects/{projectId}:
+    get:
+      tags:
+      - Projects
+      summary: Get project
+      description: Owner or Member, active or archived. Foreign/nonexistent project concealed as 404.
+      operationId: getProject
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-002
+      - FR-AUTH-005
+      responses:
+        '200':
+          description: Accessible project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              example:
+                id: 87ee2164-7607-494f-8806-04f9368edd62
+                name: Pilot project
+                description: Synthetic example
+                createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                status: active
+                myRole: owner
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+    patch:
+      tags:
+      - Projects
+      summary: Update project metadata
+      description: Owner only, active project. Nonempty PATCH with name and/or description; null description
+        clears; status/creator cannot be patched.
+      operationId: updateProject
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-003
+      - BR-006
+      responses:
+        '200':
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              example:
+                id: 87ee2164-7607-494f-8806-04f9368edd62
+                name: Updated pilot
+                description: Synthetic example
+                createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                status: active
+                myRole: owner
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: Action forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:forbidden
+                title: Action forbidden
+                status: 403
+                code: FORBIDDEN
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Action forbidden
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '409':
+          description: Project is read-only
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-archived
+                title: Project is read-only
+                status: 409
+                code: PROJECT_ARCHIVED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Project is read-only
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+            example:
+              name: Updated pilot
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 87ee2164-7607-494f-8806-04f9368edd62
+  /api/v1/projects/{projectId}/archive:
+    post:
+      tags:
+      - Projects
+      summary: Archive project
+      description: Owner only; history retained, read-only. Repeat by current owner returns archived representation.
+        No request body.
+      operationId: archiveProject
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-006
+      - BR-006
+      responses:
+        '200':
+          description: Archived project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              example:
+                id: 87ee2164-7607-494f-8806-04f9368edd62
+                name: Pilot project
+                description: Synthetic example
+                createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                status: archived
+                myRole: owner
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: Action forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:forbidden
+                title: Action forbidden
+                status: 403
+                code: FORBIDDEN
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Action forbidden
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 87ee2164-7607-494f-8806-04f9368edd62
+  /api/v1/projects/{projectId}/members:
+    get:
+      tags:
+      - Members
+      summary: List project members
+      description: Owner/Member may read active or archived project. Minimal member data, no email returned.
+        joinedAt ASC, userId ASC.
+      operationId: listMembers
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-007
+      - NFR-PER-006
+      responses:
+        '200':
+          description: Members page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberPage'
+              example:
+                items:
+                - userId: a8614250-a773-4f71-83de-67e9380f8734
+                  displayName: Developer
+                  role: member
+                  joinedAt: '2026-11-17T12:00:00Z'
+                page: 0
+                size: 20
+                totalElements: 1
+                totalPages: 1
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: size
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+    post:
+      tags:
+      - Members
+      summary: Add registered member
+      description: Owner only, active project. Existing active account by email; assigns member role only.
+        404 for unavailable account; 409 for existing membership or archive.
+      operationId: addMember
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-004
+      - BR-003
+      responses:
+        '201':
+          description: Membership created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+              example:
+                userId: a8614250-a773-4f71-83de-67e9380f8734
+                displayName: Developer
+                role: member
+                joinedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: Action forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:forbidden
+                title: Action forbidden
+                status: 403
+                code: FORBIDDEN
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Action forbidden
+        '404':
+          description: Account or project unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:user-or-project-not-found
+                title: Account or project unavailable
+                status: 404
+                code: USER_OR_PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Account or project unavailable
+        '409':
+          description: Membership or project state conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:membership-conflict
+                title: Membership or project state conflict
+                status: 409
+                code: MEMBERSHIP_CONFLICT
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Membership or project state conflict
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+            example:
+              email: developer@example.test
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 87ee2164-7607-494f-8806-04f9368edd62
+  /api/v1/projects/{projectId}/members/{userId}:
+    delete:
+      tags:
+      - Members
+      summary: Remove member
+      description: Owner only, active project; cannot remove sole owner. Nonexistent membership returns 404.
+        No body.
+      operationId: removeMember
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-004
+      - BR-005
+      responses:
+        '204':
+          description: Membership removed; subsequent protected operations denied.
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: Action forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:forbidden
+                title: Action forbidden
+                status: 403
+                code: FORBIDDEN
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Action forbidden
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '409':
+          description: Cannot remove owner or mutate archive
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:membership-conflict
+                title: Cannot remove owner or mutate archive
+                status: 409
+                code: MEMBERSHIP_CONFLICT
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Cannot remove owner or mutate archive
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 87ee2164-7607-494f-8806-04f9368edd62
+    - name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: a8614250-a773-4f71-83de-67e9380f8734
+  /api/v1/projects/{projectId}/transfer-ownership:
+    post:
+      tags:
+      - Members
+      summary: Transfer ownership
+      description: Owner only, active project. Target is a different active existing member. Atomic demotion
+        then promotion; caller remains member. Response reflects caller myRole=member. No role changes from
+        stale authorization.
+      operationId: transferOwnership
+      security:
+      - bearerAuth: []
+      x-requirements:
+      - FR-PRJ-005
+      - BR-002
+      - BR-005
+      responses:
+        '200':
+          description: Ownership transferred
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              example:
+                id: 87ee2164-7607-494f-8806-04f9368edd62
+                name: Pilot project
+                description: Synthetic example
+                createdBy: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                status: active
+                myRole: member
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:00:00Z'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:validation-error
+                title: Invalid request
+                status: 400
+                code: VALIDATION_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Invalid request
+        '401':
+          description: Authentication required or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:auth-required
+                title: Authentication required or invalid credentials
+                status: 401
+                code: AUTH_REQUIRED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Authentication required or invalid credentials
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: Bearer challenge for protected bearer endpoints; not required for cookie or login
+                failures.
+        '403':
+          description: Action forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:forbidden
+                title: Action forbidden
+                status: 403
+                code: FORBIDDEN
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Action forbidden
+        '404':
+          description: Resource not found or not accessible
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:project-not-found
+                title: Resource not found or not accessible
+                status: 404
+                code: PROJECT_NOT_FOUND
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Resource not found or not accessible
+        '409':
+          description: Target or project state prevents transfer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:ownership-conflict
+                title: Target or project state prevents transfer
+                status: 409
+                code: OWNERSHIP_CONFLICT
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Target or project state prevents transfer
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:payload-too-large
+                title: Request exceeds size limit
+                status: 413
+                code: PAYLOAD_TOO_LARGE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Request exceeds size limit
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:unsupported-media-type
+                title: Unsupported media type
+                status: 415
+                code: UNSUPPORTED_MEDIA_TYPE
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unsupported media type
+        '429':
+          description: Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:rate-limited
+                title: Too many requests
+                status: 429
+                code: RATE_LIMITED
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until another request may be attempted.
+        '500':
+          description: Unexpected server failure
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:team-ai:problem:internal-error
+                title: Unexpected server failure
+                status: 500
+                code: INTERNAL_ERROR
+                correlationId: 3e0e8a7a-a805-4558-89a1-2411d51d1531
+                detail: Unexpected server failure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+            example:
+              newOwnerUserId: a8614250-a773-4f71-83de-67e9380f8734
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 87ee2164-7607-494f-8806-04f9368edd62
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+    csrfCookie:
+      type: apiKey
+      in: cookie
+      name: csrf_token
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  schemas:
+    Problem:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+        correlationId:
+          type: string
+          format: uuid
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              code:
+                type: string
+            required:
+            - field
+            - message
+            - code
+        retryable:
+          type: boolean
+      required:
+      - type
+      - title
+      - status
+      - code
+      - correlationId
+    CsrfToken:
+      type: object
+      additionalProperties: false
+      properties:
+        headerName:
+          type: string
+          enum:
+          - X-CSRF-Token
+        token:
+          type: string
+          minLength: 1
+      required:
+      - headerName
+      - token
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trim before validation; case-insensitive identity.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed; must not be whitespace-only.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          format: password
+          writeOnly: true
+          description: 12–128 Unicode code points; no trimming; UTF-8 at most 512 bytes.
+      required:
+      - email
+      - displayName
+      - password
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trim before validation; case-insensitive identity.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          format: password
+          writeOnly: true
+      required:
+      - email
+      - password
+    User:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trim before validation; case-insensitive identity.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed; must not be whitespace-only.
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - email
+      - displayName
+      - isActive
+      - createdAt
+      - updatedAt
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        accessToken:
+          type: string
+          minLength: 1
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiresIn:
+          type: integer
+          enum:
+          - 900
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - accessToken
+      - tokenType
+      - expiresIn
+      - user
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Trimmed; must not be whitespace-only.
+        description:
+          type: string
+          maxLength: 4000
+          nullable: true
+          description: Null clears description.
+      required:
+      - name
+    UpdateProjectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Trimmed; must not be whitespace-only.
+        description:
+          type: string
+          maxLength: 4000
+          nullable: true
+          description: Null clears description.
+      required: []
+      minProperties: 1
+    Project:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          description: Trimmed; must not be whitespace-only.
+        description:
+          type: string
+          maxLength: 4000
+          nullable: true
+          description: Null clears description.
+        createdBy:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - active
+          - archived
+        myRole:
+          type: string
+          enum:
+          - owner
+          - member
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - description
+      - createdBy
+      - status
+      - myRole
+      - createdAt
+      - updatedAt
+    Member:
+      type: object
+      additionalProperties: false
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed; must not be whitespace-only.
+        role:
+          type: string
+          enum:
+          - owner
+          - member
+        joinedAt:
+          type: string
+          format: date-time
+      required:
+      - userId
+      - displayName
+      - role
+      - joinedAt
+    AddMemberRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trim before validation; case-insensitive identity.
+      required:
+      - email
+    TransferOwnershipRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        newOwnerUserId:
+          type: string
+          format: uuid
+      required:
+      - newOwnerUserId
+    ProjectPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
+    MemberPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
