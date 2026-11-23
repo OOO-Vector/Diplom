@@ -66,7 +66,9 @@ public class SecurityConfiguration {
     @Bean @Order(2)
     SecurityFilterChain resources(HttpSecurity http, ApiProblems problems, JwtDecoder decoder, UserService users) throws Exception {
         stateless(http);
-        return http.oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder))
+        // This chain authenticates only Authorization bearer tokens; the earlier auth chain retains CSRF.
+        return http.csrf(c -> c.disable())
+                .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder))
                         .authenticationEntryPoint((request, response, ex) -> {
                             response.setHeader("WWW-Authenticate", "Bearer error=\"invalid_token\"");
                             problems.write(request, response, 401, "AUTH_REQUIRED", "Authentication required or invalid credentials");

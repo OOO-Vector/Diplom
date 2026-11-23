@@ -35,7 +35,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<?> mediaType() { return response(415, "UNSUPPORTED_MEDIA_TYPE", "Unsupported media type"); }
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> unexpected() { return response(500, "INTERNAL_ERROR", "Unexpected server failure"); }
+    public ResponseEntity<?> unexpected(Exception exception) {
+        return ResponseEntity.status(500).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .cacheControl(CacheControl.noStore()).body(problems.unexpected(exception));
+    }
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> conflict(DataIntegrityViolationException exception) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
@@ -44,6 +47,6 @@ public class ApiExceptionHandler {
                 return response(409, "EMAIL_ALREADY_EXISTS", "Email already registered");
             }
         }
-        return response(500, "INTERNAL_ERROR", "Unexpected server failure");
+        return unexpected(exception);
     }
 }
