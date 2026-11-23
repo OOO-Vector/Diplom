@@ -1,6 +1,6 @@
 # Security Design — Core baseline
 
-**Version:** 0.1.0 · **Status:** proposed detail based on DEC-02/03/04/16; peer review required
+**Version:** 0.1.1 · **Status:** SET-01 review corrections; browser-only Origin policy and zero JWT clock skew approved for the current MVP. Remaining proposed details require review; production implementation is pending.
 
 ## 1. Trust boundaries and threat model
 
@@ -13,11 +13,17 @@ Browser → same-origin HTTPS proxy → Java. Java → private PG, internal ML, 
 - Refresh credential: random >=256 bits, base64url opaque value; store SHA-256 digest only (high-entropy token), constant-safe verification; family absolute TTL 7 days from login (rotation never extends beyond family expiry). New login independent family. Transaction locks family via stable root/row locking; consumed/revoked/expired credentials cannot issue access. On replay of consumed token, revoke entire family and audit; ensure revocation commits before sending 401 (do not roll it back with exception). Old-token replacement link retained to distinguish replay. Network-lost rotation forces login rather than allowing unsafe reuse. Client single-flight refresh including across tabs (coordinate with Web Locks/BroadcastChannel where available; fallback re-login on replay); no automatic retry of cookie rotation. Token issuance only after successful commit.
 - `refresh_token` HttpOnly, Secure, SameSite=Lax, host-only, Path=/api/v1/auth, Max-Age no longer than family expiry; clear matching attributes on logout/revoked refresh. Production never insecure. Local Vite proxy / same-origin HTTPS development recommended; if insecure localhost exception is necessary, explicit dev-only config with no real data, never remote deployment. `Cache-Control: no-store` on CSRF and auth responses.
 
+Approved MVP JWT time policy: clock skew = 0 seconds, with no expiry grace period. Reject at `now >= exp`, reject future `iat` and future `nbf` when present, and enforce an access-token lifetime of at most 900 seconds. Signing and validation must use an injected `java.time.Clock` (UTC system clock in production, fixed clock in tests). Issuing and validating hosts must keep their clocks synchronized (for example through NTP); monitor clock drift and correct infrastructure time rather than silently widening the tolerance. This decision preserves the SRS maximum access-token validity after logout.
+
 ## 3. CSRF and CORS contract
 
 Proposed same-origin browser flow: `GET /api/v1/auth/csrf` establishes an HttpOnly host-only `csrf_token` cookie (Secure, SameSite=Lax, Path=/api/v1/auth) and returns CSRF header token in JSON. Server validates `X-CSRF-Token` against cookie via Spring CSRF mechanism (masked token accepted by configured handler; verify with integration test), for POST register/login/refresh/logout. Re-fetch after login/logout or CSRF rejection; rotate token on auth boundary. Credentials are sent same-origin, cookie is not readable by frontend. Bearer-only project endpoints have no ambient cookie authentication; CSRF exemption limited to bearer resource endpoints, never blanket disable across cookie endpoints. No GET mutation other than issuing CSRF bootstrap cookie. Logout requires valid CSRF but may clear absent/invalid refresh and return 204; no bearer requirement.
 
 Prefer same-origin proxy; if local separated origin is unavoidable allow only exact configured development origin, allow credentials and listed headers, never wildcard; strict origin validation for cookie-based POST, appropriate preflight, no permissive CORS in production. SameSite is defense in depth, not a substitute for CSRF. Auth responses never return refresh credential in JSON.
+
+Approved browser-only Origin policy: POST `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh` and `/api/v1/auth/logout` require an `Origin` exactly matching a configured allowed origin (scheme, host and port). Missing Origin, the literal `null` Origin and any foreign Origin are rejected with 403, even with valid CSRF credentials. No Referer fallback or CLI exemption is provided. CORS configuration alone is insufficient: enforce this check before auth side effects and retain CSRF validation. CLI clients without Origin are intentionally unsupported by these browser endpoints; manually sending an allowed Origin does not replace cookie/CSRF requirements or prove that a client is a browser.
+
+Use same-origin HTTPS for the supported browser flow: Secure cookies and remote deployments require HTTPS. The localhost HTTP URL in OpenAPI is not a promise that browser cookie authentication works over HTTP. Any explicit dev-only localhost exception mentioned above must preserve the Origin and CSRF checks and must never apply remotely. Return `Cache-Control: no-store` on every auth response, including Origin/CSRF failures and other errors.
 
 ## 4. Authorization and concurrency
 

@@ -1,8 +1,8 @@
 # SET-01 — Security Spike и предложения для review
 
-Дата: 2026-11-23. Статус: технический spike выполнен; решения предложены на внешнее review, не утверждены.
+Дата: 2026-11-23. Статус: исправления по внешнему Changes Requested подготовлены; browser-only Origin и clock skew = 0 согласованы пользователем для MVP. Повторное внешнее review ожидается.
 Задача: [Issue #12](https://github.com/OOO-Vector/Diplom/issues/12).
-База: `ce657dd32f7a9a75a5248016827d7406bc3d5e3e`, ветка `feat/set-01-security-spike`, плюс локальные документы и изменения, без commit.
+Исходная база: `ce657dd32f7a9a75a5248016827d7406bc3d5e3e`. Проверенный внешним ревью commit: `1e6d2aec1dec60e7ce10f5dedf51c8faf082cf2e`, опубликован в `feat/set-01-security-spike`. Текущие исправления продолжают эту ветку.
 
 ## 1. Источники и фактическая база
 
@@ -55,7 +55,7 @@ Spike не подключает JPA/Liquibase и не загружает applica
 `NimbusJwtEncoder` и `NimbusJwtDecoder`, RSA минимум 2048 бит, только RS256. Проверять подпись, issuer, audience,
 обязательные UUID sub/jti, iat/exp, exp > now, iat <= now, exp > iat и срок <=900 секунд; учитывать nbf при наличии.
 В spike время фиксировано для воспроизводимости. Production должен использовать внедряемый Clock.
-Проверка обязательности claims нужна дополнительно к базовым validators. Clock skew предложен 0:
+Проверка обязательности claims нужна дополнительно к базовым validators. Clock skew = 0 утверждён для текущего MVP:
 иначе стандартный допуск может продлить фактическое принятие токена за границу 15 минут. Нужна синхронизация часов;
 изменение этой политики требует согласования с SRS FR-AUTH-003.
 
@@ -96,7 +96,7 @@ Refresh Max-Age <= оставшегося абсолютного срока се
 Все auth ответы, включая отказы по Origin, должны иметь Cache-Control: no-store.
 
 В spike проверена строгая browser-only политика Origin: ровно разрешённый origin; missing/null/foreign отклоняются.
-Это уточнение proposed design, требует согласования: CLI без Origin тоже получит 403. Возможный Referer fallback не реализован.
+Эта browser-only политика согласована: CLI без Origin тоже получает 403, Referer fallback и CLI exemption не предусмотрены.
 CORS: exact allowlist, credentials=true, ограниченные headers/methods, корректный preflight, без wildcard.
 Production предпочтительно same-origin HTTPS. Local HTTP OpenAPI server не гарантирует работу Secure cookie:
 нужен согласованный proxy/TLS либо отдельное явное dev-only исключение.
@@ -132,17 +132,19 @@ SecureRandom >=32 bytes, base64url без padding, SHA-256 digest в БД вме
 2. SRS DEC-15 называет JUnit 5, фактический Boot BOM выбирает JUnit 6.0.3. Доказательство относится к реально разрешённым версиям.
 3. Core Design «timestamps server-generated» требует уточнения: у users/projects/project_members в 002 нет timestamp DEFAULT.
    Значения должен присваивать backend; это не основание менять 002.
-4. Register password явно задаёт code points/UTF-8, LoginRequest задаёт лишь minLength=1/maxLength=128.
-   Согласовать единицы/byte cap для login; не навязывать регистрационный минимум существующим аккаунтам автоматически.
-5. Security требует no-store на всех auth ответах, OpenAPI не перечисляет его у register/части ошибок.
-   Refresh 401 описывает clear cookie, но не документирует соответствующий Set-Cookie header в response.
-6. Exact Origin allowlist, missing/null policy, issuer/audience values, zero clock skew и key rotation нуждаются в утверждении.
+4. Исправлено по review: LoginRequest явно задаёт 1–128 Unicode code points и UTF-8 максимум 512 bytes,
+   без trim/normalization/truncation; регистрационный минимум 12 не навязывается login.
+5. Исправлено по review: OpenAPI задаёт no-store для всех 31 auth responses, включая ошибки;
+   refresh 401 документирует обязательный Set-Cookie для очистки invalid/expired/replayed credential.
+6. Browser-only exact Origin policy (missing/null/foreign → 403) и clock skew = 0 утверждены для MVP.
+   Конкретные deployment origins, issuer/audience values и key rotation остаются предметом последующего согласования.
 7. Cookie+XOR proof не подтверждает generic Problem Details, rate limiting, account enumeration/timing protection или active-user checks.
    Stub POST возвращает 204 исключительно для проверки filter chain; он не изображает реализацию register/login response schemas.
 8. Ссылки API_Overview.md в OpenAPI и SRS_Decisions.md в SRS локально отсутствуют; V-03 из Issue #12 не найден в доступном SRS.
 9. DB-014 (#11) open: исторический отчёт базы не подменяет требуемую повторную проверку live develop.
 
-Исходные proposed Security/Core/OpenAPI документы не переписаны: изменения политики перечислены здесь для review.
+По внешнему review обновлены Security Design и OpenAPI; Core Design не менялся. Утверждение двух политик не означает
+автоматического принятия остальных proposed деталей или готовности production authentication.
 
 ## 5. Фактические проверки и воспроизведение
 
@@ -187,8 +189,8 @@ bootJar: BUILD SUCCESSFUL; проверка `jar tf` не нашла spike class
 
 Namespace `com.teamai.orchestrator`, Core api/application/domain/persistence, общая Security в infrastructure.
 Не переносить stub controller или фиксированный Clock из spike в production.
-Следующий конкретный шаг: внешнее review этого отчёта и proposed contracts; затем отдельное поручение CORE-01 с учётом DB-014.
-Peer review не выполнен и не симулирован. Issue не закрыт. На момент подготовки spike commit/push не делались.
+Следующий конкретный шаг: повторное внешнее review исправлений; затем отдельное поручение CORE-01 с учётом DB-014.
+Первое внешнее review завершено с Changes Requested, как сообщил пользователь. Issue не закрыт.
 
 ### Финальная проверка перед публикацией SET-01
 
@@ -198,7 +200,35 @@ BUILD SUCCESSFUL, 7 tests, 0 failures/errors/skips. XML evidence обновле�
 авторизация существует только в изолированном spike. Проверка добавляемых файлов на секреты выявила только
 явно синтетические примеры. В состав публикации входят spike, его отчёт/evidence и предоставленные пользователем
 SRS/Core/Security/OpenAPI contracts; `.env`, build outputs и caches исключены.
-Публикация ветки не означает принятия proposed contracts: внешнее Code Review остаётся следующим этапом.
+Первоначальная публикация выполнена commit `1e6d2aec1dec60e7ce10f5dedf51c8faf082cf2e`; её XML evidence сохранены
+как исторические результаты. Публикация не означала принятия proposed contracts.
+
+### Внешнее Code Review и исправления
+
+По сообщению пользователя, review commit `1e6d2aec1dec60e7ce10f5dedf51c8faf082cf2e` завершилось Changes Requested.
+Критических ошибок в Java Security Spike не обнаружено; тестовая архитектура оставлена без изменений.
+Ссылка на отдельный review artifact не предоставлена; результат зафиксирован со слов пользователя, без выдуманного approval.
+
+Выполнены четыре требования:
+
+1. Security Design: строгий Origin для четырёх auth POST; missing/null/foreign отклоняются даже с валидным CSRF.
+   CLI без Origin не поддерживается; подстановка Origin не доказывает браузерную природу клиента. Описана необходимость HTTPS.
+2. Security Design: clock skew = 0, отказ при now >= exp, синхронизация часов и внедряемый UTC Clock; фиксированный Clock только в тестах.
+3. OpenAPI: no-store на всех auth responses; обязательная очистка refresh-cookie в 401 с matching attributes;
+   login 1–128 Unicode code points/512 UTF-8 bytes без trim/normalization/truncation.
+4. Этот отчёт обновлён: исходный commit SHA, внешний Changes Requested и согласованные решения отражены явно.
+
+Повторная проверка после исправлений, 2026-11-23: `gradlew.bat securitySpike --rerun-tasks --console=plain` —
+BUILD SUCCESSFUL, 7 tests, 0 failures/errors/skips. Начало XML suites: 07:19:34.747Z (browser, 4 tests),
+07:19:37.629Z (crypto, 3 tests). Новые результаты доступны в `backend/build/test-results/securitySpike/`;
+исторические XML evidence из reviewed commit не перезаписаны. Остаётся прежнее нефатальное предупреждение JVM CDS.
+
+YAML проверен установленным SnakeYAML 2.5 через временный Java validator вне репозитория: parsing с запретом duplicate keys,
+разрешение всех локальных `$ref`, no-store для всех 31 auth responses, refresh 401 clearing attributes,
+login bounds/Unicode description, наличие `/users/me` и отсутствие `/auth/me` — PASS.
+Это проверка YAML и целевых инвариантов, не полная OpenAPI schema validation и не новый API integration test.
+PyYAML локально отсутствует; новых зависимостей ради этой проверки не устанавливалось.
+Production-код, SQL migrations, Gradle и Java spike не изменены; CORE-01–04 не начаты.
 
 ## 7. Первичные источники библиотек
 
