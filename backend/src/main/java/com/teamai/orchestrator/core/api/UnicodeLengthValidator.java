@@ -13,7 +13,7 @@ public class UnicodeLengthValidator implements ConstraintValidator<UnicodeLength
         if (value == null) return true;
         int count = value.codePointCount(0, value.length());
         return count >= min && count <= max
-                && value.codePoints().noneMatch(c -> c == 0 || (c >= 0xD800 && c <= 0xDFFF))
+                && value.codePoints().noneMatch(c -> c >= 0xD800 && c <= 0xDFFF)
                 && value.getBytes(StandardCharsets.UTF_8).length <= maxBytes;
     }
 }

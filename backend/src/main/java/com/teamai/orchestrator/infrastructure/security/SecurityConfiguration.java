@@ -1,5 +1,9 @@
 package com.teamai.orchestrator.infrastructure.security;
 
+import com.teamai.orchestrator.core.application.UserService;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.core.annotation.Order;
@@ -52,7 +56,7 @@ public class SecurityConfiguration {
                 .csrf(c -> c.csrfTokenRepository(csrf).csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler()))
                 .addFilterBefore(new BrowserAuthFilter(origins, problems), CorsFilter.class)
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll().anyRequest().denyAll())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll().anyRequest().denyAll())
                 .exceptionHandling(e -> e.accessDeniedHandler((request, response, ex) ->
                         problems.write(request, response, 403, "CSRF_INVALID", "CSRF validation failed"))
                         .authenticationEntryPoint((request, response, ex) ->
@@ -60,9 +64,15 @@ public class SecurityConfiguration {
                 .build();
     }
     @Bean @Order(2)
-    SecurityFilterChain resources(HttpSecurity http, ApiProblems problems) throws Exception {
+    SecurityFilterChain resources(HttpSecurity http, ApiProblems problems, JwtDecoder decoder, UserService users) throws Exception {
         stateless(http);
-        return http.authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
+        return http.oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder))
+                        .authenticationEntryPoint((request, response, ex) -> {
+                            response.setHeader("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+                            problems.write(request, response, 401, "AUTH_REQUIRED", "Authentication required or invalid credentials");
+                        }))
+                .addFilterAfter(new ActiveUserFilter(users, problems), BearerTokenAuthenticationFilter.class)
+                .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
                     response.setHeader("WWW-Authenticate", "Bearer");

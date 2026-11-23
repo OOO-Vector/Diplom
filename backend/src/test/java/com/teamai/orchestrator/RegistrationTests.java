@@ -18,33 +18,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
-@SpringBootTest
-class RegistrationTests extends PostgresTestSupport {
-    static final String ORIGIN = "https://app.example.test";
-    static final String PASSWORD = " synthetic fixture password ";
-    @Autowired WebApplicationContext context;
-    @Autowired ObjectMapper json;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired PasswordEncoder passwords;
-    MockMvc mvc;
-    @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
-
-    record Csrf(Cookie cookie, String token) {}
-    Csrf csrf() throws Exception {
-        var response = mvc.perform(get("/api/v1/auth/csrf").secure(true)).andReturn().getResponse();
-        assertEquals(200, response.getStatus());
-        assertEquals("no-store", response.getHeader("Cache-Control"));
-        var cookie = response.getCookie("csrf_token");
-        assertTrue(cookie.isHttpOnly()); assertTrue(cookie.getSecure());
-        assertEquals("/api/v1/auth", cookie.getPath());
-        assertEquals("Lax", cookie.getAttribute("SameSite"));
-        return new Csrf(cookie, json.readTree(response.getContentAsString()).get("token").asString());
-    }
-    Map<String, String> body(String email) { return Map.of("email", email, "displayName", " Example ", "password", PASSWORD); }
-    MockHttpServletRequestBuilder registration(Map<String, String> body, Csrf csrf) throws Exception {
-        return post("/api/v1/auth/register").secure(true).header("Origin", ORIGIN)
-                .cookie(csrf.cookie()).header("X-CSRF-Token", csrf.token())
-                .contentType("application/json").content(json.writeValueAsString(body));
+class RegistrationTests extends AuthApiTestSupport {
+    @Test void registerRateLimitPreventsSixthInsert() throws Exception {
+        var csrf = csrf();
+        for (int i = 0; i < 6; i++) {
+            var response = mvc.perform(registration(body(UUID.randomUUID()+"@example.test"), csrf)
+                    .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })).andReturn().getResponse();
+            assertEquals(i < 5 ? 201 : 429, response.getStatus());
+        }
     }
     @Test void registersSafeUserAndHashesExactPassword() throws Exception {
         String email = UUID.randomUUID() + "@example.test";
@@ -107,8 +88,33 @@ class RegistrationTests extends PostgresTestSupport {
         var response = mvc.perform(registration(body(email), csrf())).andReturn().getResponse();
         String id = json.readTree(response.getContentAsString()).get("id").asString();
         assertEquals(401, mvc.perform(get("/api/v1/users/me")).andReturn().getResponse().getStatus());
-        assertEquals(200, mvc.perform(get("/api/v1/users/me").with(user(id))).andReturn().getResponse().getStatus());
+        String token = tokens.issue(UUID.fromString(id));
+        assertEquals(200, mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token)).andReturn().getResponse().getStatus());
         jdbc.update("update users set is_active = false where id = ?", UUID.fromString(id));
-        assertEquals(401, mvc.perform(get("/api/v1/users/me").with(user(id))).andReturn().getResponse().getStatus());
+        assertEquals(401, mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token)).andReturn().getResponse().getStatus());
+        assertEquals(401, mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + tokens.issue(UUID.randomUUID()))).andReturn().getResponse().getStatus());
+        assertEquals(401, mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer broken")).andReturn().getResponse().getStatus());
+    }
+    @Test void rejectsOversizedBodiesAndJsonTypeCoercion() throws Exception {
+        var csrf = csrf();
+        var request = registration(body(UUID.randomUUID()+"@example.test"), csrf);
+        request.content("{\"email\":\"numeric-password@example.test\",\"displayName\":\"Example\",\"password\":123456789012}");
+        assertEquals(400, mvc.perform(request).andReturn().getResponse().getStatus());
+        request.content(" ".repeat(16 * 1024 + 1));
+        var response = mvc.perform(request).andReturn().getResponse();
+        assertEquals(413, response.getStatus()); assertEquals("no-store", response.getHeader("Cache-Control"));
+    }
+    @Test void csrfRequiresMaskedHeaderAndCorsIsExact() throws Exception {
+        var csrf = csrf();
+        assertEquals(403, mvc.perform(registration(body(UUID.randomUUID()+"@example.test"),
+                new Csrf(csrf.cookie(), csrf.cookie().getValue()))).andReturn().getResponse().getStatus());
+        var allowed = mvc.perform(options("/api/v1/auth/login").header("Origin", ORIGIN)
+                .header("Access-Control-Request-Method", "POST").header("Access-Control-Request-Headers", "X-CSRF-Token,Content-Type"))
+                .andReturn().getResponse();
+        assertEquals(200, allowed.getStatus()); assertEquals(ORIGIN, allowed.getHeader("Access-Control-Allow-Origin"));
+        assertEquals("true", allowed.getHeader("Access-Control-Allow-Credentials"));
+        var forbidden = mvc.perform(options("/api/v1/auth/login").header("Origin", "https://foreign.example.test")
+                .header("Access-Control-Request-Method", "POST")).andReturn().getResponse();
+        assertEquals(403, forbidden.getStatus()); assertEquals("no-store", forbidden.getHeader("Cache-Control"));
     }
 }
