@@ -36,3 +36,25 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// SET-01: isolated library/protocol experiment; never included in the application jar.
+sourceSets {
+	securitySpike
+}
+
+dependencies {
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	securitySpikeImplementation 'org.bouncycastle:bcprov-jdk18on:1.87'
+	securitySpikeRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('securitySpike', Test) {
+	description = 'Runs SET-01 security experiments without application startup or database access.'
+	group = 'verification'
+	testClassesDirs = sourceSets.securitySpike.output.classesDirs
+	classpath = sourceSets.securitySpike.runtimeClasspath
+	useJUnitPlatform()
+}
