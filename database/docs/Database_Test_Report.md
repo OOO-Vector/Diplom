@@ -6,6 +6,12 @@
 **Report date:** 15 November 2026  
 **Status:** Development database verification; not a production certification
 
+**2026-11-23 addendum:** This document retains the historical 001–012 / 27-table results.
+Migration 013 schema and test instructions are maintained in
+[CORE-01_Refresh_Sessions.md](CORE-01_Refresh_Sessions.md); run outcomes belong in
+[Issue #14](https://github.com/OOO-Vector/Diplom/issues/14), with generated reports kept locally under backend/build/.
+The new current schema has 29 application tables. This addendum does not assert that DB-014 or all 78 historical checks were rerun.
+
 ## 1. Purpose and scope
 
 This report documents evidence collected during database development and verification. It addresses schema reproducibility, referential and business-rule integrity, access controls, concurrency handling, and query performance. The primary application database is `team_ai_db`. A separate database, `team_ai_repro_check`, was used for the clean-schema migration test. A second, fully independent PostgreSQL container (`team-ai-postgres-repro`, port 5434) and a fresh Docker volume were then used to verify clean infrastructure initialization. Both exercises avoided destructive changes to the development database.
