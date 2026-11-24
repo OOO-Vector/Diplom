@@ -18,8 +18,13 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .cacheControl(CacheControl.noStore()).body(problems.body(status, code, title));
     }
-    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
+    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
     public ResponseEntity<?> invalid() { return response(400, "VALIDATION_ERROR", "Invalid request"); }
+    @ExceptionHandler(com.teamai.orchestrator.core.application.CoreException.class)
+    public ResponseEntity<?> core(com.teamai.orchestrator.core.application.CoreException exception) {
+        return response(exception.status(), exception.code(), exception.getMessage());
+    }
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<?> unauthorized(HttpServletRequest request) {
         return (request.getContextPath() + "/api/v1/auth/login").equals(request.getRequestURI())

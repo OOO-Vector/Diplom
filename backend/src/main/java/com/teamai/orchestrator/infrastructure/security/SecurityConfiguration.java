@@ -75,7 +75,9 @@ public class SecurityConfiguration {
                             problems.write(request, response, 401, "AUTH_REQUIRED", "Authentication required or invalid credentials");
                         }))
                 .addFilterAfter(new ActiveUserFilter(users, problems), BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new ProjectBodyLimitFilter(problems), org.springframework.security.web.access.intercept.AuthorizationFilter.class)
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
+                        .requestMatchers("/api/v1/projects", "/api/v1/projects/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
                     response.setHeader("WWW-Authenticate", "Bearer");
