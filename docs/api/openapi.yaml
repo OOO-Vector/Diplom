@@ -2,8 +2,9 @@ openapi: 3.0.3
 info:
   title: Team AI Orchestrator — Public REST API
   version: 0.1.0
-  description: Core & Access API contract. Authentication and current user are implemented through CORE-04
-    for external review; project/member routes remain planned. Deployment is not claimed.
+  description: Core & Access API contract. Authentication and current user are implemented through CORE-04;
+    project/member routes are implemented for CORE-05/06 external review. Project POST/PATCH/DELETE request bodies
+    are limited to 32 KiB. Deployment is not claimed.
 servers:
 - url: http://localhost:8080
   description: Proposed local API (use same-origin HTTPS/proxy for secure cookie flows)
@@ -1432,6 +1433,12 @@ paths:
       - FR-PRJ-006
       - BR-006
       responses:
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '200':
           description: Archived project
           content:
@@ -1849,6 +1856,12 @@ paths:
       - FR-PRJ-004
       - BR-005
       responses:
+        '413':
+          description: Request exceeds size limit
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '204':
           description: Membership removed; subsequent protected operations denied.
         '400':

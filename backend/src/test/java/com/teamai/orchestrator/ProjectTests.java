@@ -58,6 +58,8 @@ class ProjectTests extends ProjectApiTestSupport {
         for (UUID target : List.of(id, UUID.randomUUID())) {
             var response = mvc.perform(as(foreign, get("/api/v1/projects/"+target))).andReturn().getResponse();
             assertEquals(404, response.getStatus()); assertEquals("PROJECT_NOT_FOUND", json.readTree(response.getContentAsString()).get("code").asString());
+            assertEquals(404, mvc.perform(as(foreign, body(patch("/api/v1/projects/"+target), Map.of("name", "Denied")))).andReturn().getResponse().getStatus());
+            assertEquals(404, mvc.perform(as(foreign, post("/api/v1/projects/"+target+"/archive"))).andReturn().getResponse().getStatus());
         }
         assertEquals(403, mvc.perform(as(reader, body(patch(path), Map.of("name", "Denied")))).andReturn().getResponse().getStatus());
         assertEquals(403, mvc.perform(as(reader, post(path+"/archive"))).andReturn().getResponse().getStatus());
@@ -73,6 +75,8 @@ class ProjectTests extends ProjectApiTestSupport {
     }
     @Test void validationAndAuthenticationRejectUnsafeRequests() throws Exception {
         var actor = actor(); var id = create(actor); String path = "/api/v1/projects/"+id;
+        assertEquals(400, mvc.perform(as(actor, body(post("/api/v1/projects"), Map.of("name", "Injected", "createdBy", UUID.randomUUID())))).andReturn().getResponse().getStatus());
+        assertEquals(400, mvc.perform(as(actor, body(post("/api/v1/projects"), Map.of("name", "Injected", "role", "owner")))).andReturn().getResponse().getStatus());
         for (String input : List.of("{}", "{\"name\":null}", "{\"name\":\"   \"}", "{\"status\":\"archived\"}", "{\"createdBy\":\""+actor.getId()+"\"}", "{\"namePresent\":true}", "{\"name\":123}")) {
             assertEquals(400, mvc.perform(as(actor, patch(path).contentType("application/json").content(input))).andReturn().getResponse().getStatus(), input);
         }

@@ -23,7 +23,8 @@ public class ProjectService {
     public ProjectResponse create(CreateProjectRequest request) {
         var actor = access.actor(); var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         var project = projects.saveAndFlush(new Project(actor, request.name(), request.description(), now));
-        // Newly inserted row is already exclusively owned by this transaction; initial owner is committed with it.
+        // Use the same project-first lock order even for the newly inserted, not-yet-visible row.
+        projects.lock(project.getId()).orElseThrow(CoreException::missing);
         members.saveAndFlush(new ProjectMember(project.getId(), actor, "owner", now));
         return ProjectResponse.from(project, "owner");
     }

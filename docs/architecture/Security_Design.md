@@ -1,6 +1,6 @@
 # Security Design — Core baseline
 
-**Version:** 0.1.3 · **Status:** CORE-04 refresh rotation, replay detection and logout implemented for external review on the merged CORE-02/03 baseline. Browser-only Origin policy and zero JWT clock skew retained.
+**Version:** 0.1.4 · **Status:** CORE-05/06 project scope, memberships and ownership transfer implemented for external review on the merged CORE-04 baseline. Browser-only Origin policy and zero JWT clock skew retained.
 
 ## 1. Trust boundaries and threat model
 
@@ -50,6 +50,17 @@ family locking does not serialize an administrative account-status update, so in
 Authenticate active user, scope `projectId` to membership, then validate object IDs against project, role and write state. Foreign resources return 404; known project permission failure 403. Archived projects read-only for all members. Owner cannot inspect another user's private chat. Only Owner sets project metadata, membership, GitHub connection, backlog/decision approval, override and archive. Both roles may publish an approved task and access common knowledge. All workers recheck actor/scope/version before side effects; signed provider webhooks map only verified connected repos (system actor, not arbitrary user). Core row locks for project-state transitions; no RLS required MVP but DB constraints do not replace per-user guards.
 
 ## 5. Security controls by boundary
+
+Project and membership endpoints are in the bearer-only chain and require a valid JWT plus active account. The cookie-auth
+CSRF/Origin chain is unchanged. `ProjectAccess` checks database membership on every guarded operation; project JWT role
+claims are not authoritative. Foreign/unknown projects return the same 404, including member-list counts and nested IDs.
+The add-member contract uses USER_OR_PROJECT_NOT_FOUND for unavailable accounts/projects; known non-owner writes return
+403. Archive/state conflicts use the endpoint-specific OpenAPI 409 codes. Project mutations lock the project row before
+reading permissions/status, so competing ownership transfers cannot authorize from the previous Owner's stale role.
+Read checks and page/count queries share a REPEATABLE READ snapshot; administrative user status changes are not serialized
+with project locks. Updates to an account after the active-user check can affect subsequent requests rather than cancel an in-flight one.
+Bodies for project POST/PATCH/DELETE are capped at 32 KiB after bearer authorization, before parsing; unknown fields and
+scalar coercion are rejected. This is an input bound, not a claim of load-tested service-wide abuse protection.
 
 | Boundary | Controls and tests |
 |---|---|
