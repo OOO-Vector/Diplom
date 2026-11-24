@@ -56,7 +56,8 @@ public class SecurityConfiguration {
                 .csrf(c -> c.csrfTokenRepository(csrf).csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler()))
                 .addFilterBefore(new BrowserAuthFilter(origins, problems), CorsFilter.class)
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll().anyRequest().denyAll())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
+                                "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll().anyRequest().denyAll())
                 .exceptionHandling(e -> e.accessDeniedHandler((request, response, ex) ->
                         problems.write(request, response, 403, "CSRF_INVALID", "CSRF validation failed"))
                         .authenticationEntryPoint((request, response, ex) ->

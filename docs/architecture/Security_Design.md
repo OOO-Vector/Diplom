@@ -1,6 +1,6 @@
 # Security Design — Core baseline
 
-**Version:** 0.1.2 · **Status:** CORE-02/03 implementation prepared for external review. Browser-only Origin policy and zero JWT clock skew retained. Refresh rotation/logout remain CORE-04.
+**Version:** 0.1.3 · **Status:** CORE-04 refresh rotation, replay detection and logout implemented for external review on the merged CORE-02/03 baseline. Browser-only Origin policy and zero JWT clock skew retained.
 
 ## 1. Trust boundaries and threat model
 
@@ -27,7 +27,25 @@ Use same-origin HTTPS for the supported browser flow: Secure cookies and remote 
 
 ## 4. Authorization and concurrency
 
-CORE-01 persistence: migration 013 separates `refresh_token_families` (stable lock row, owner, absolute expiry and family revocation) from `refresh_sessions` (SHA-256 digest and generation state). Future rotation, logout and replay commands must lock the family first with `SELECT ... FOR UPDATE` at READ COMMITTED, then re-read token state and check family expiry/revocation. A consumed-token replay and a current-token rotation therefore contend on the same row. App permissions exclude history deletion and identity/hash/lifetime updates; general app_read has no refresh access. See [schema, constraints, lock order and verification](../../database/docs/CORE-01_Refresh_Sessions.md). SQL structure and locking primitives are implemented/tested separately from the future production auth services; DDL alone does not implement replay handling or enforce that a caller follows the locking protocol.
+CORE-01 persistence: migration 013 separates `refresh_token_families` (stable lock row, owner, absolute expiry and family revocation) from `refresh_sessions` (SHA-256 digest and generation state). Rotation, logout and replay commands lock the family first with `SELECT ... FOR UPDATE OF f` at READ COMMITTED, then re-read token state and check family expiry/revocation. A consumed-token replay and a current-token rotation therefore contend on the same row. App permissions exclude history deletion and identity/hash/lifetime updates; general app_read has no refresh access. See [schema, constraints, lock order and verification](../../database/docs/CORE-01_Refresh_Sessions.md). CORE-04 follows this protocol in application code without changing migrations or grants; DDL alone does not enforce it.
+
+Refresh/logout accept no request body; nonempty bodies return 400 without session changes. Exactly one `refresh_token`
+cookie is accepted, containing canonical unpadded base64url encoding of 32 bytes (43 characters). The SHA-256 input is
+the ASCII wire credential, matching login issuance. Missing, duplicate, malformed, unknown, expired or revoked credentials
+produce generic REFRESH_INVALID/401 on refresh, clearing both refresh and CSRF cookies; bootstrap CSRF again before login.
+Successful refresh retains the CSRF cookie and rotates only the refresh credential. Logout clears both cookies and returns
+204 for missing/invalid/expired/already-revoked credentials; a known family is revoked even through a consumed generation.
+
+Each refresh/logout command owns a REQUIRES_NEW, READ COMMITTED transaction. After acquiring the family lock it re-reads
+the generation in a separate SQL statement and obtains a fresh Clock instant. Rotation updates consumed_at/replacement_id
+before inserting the successor with unchanged family lifetime, satisfying the partial unique index and deferred FK.
+JWT signing occurs inside this transaction; no replacement cookie/token is returned before commit. Signing, SQL and
+commit-time constraint failures roll back consumption/insertion and produce a generic server error, never a successful logout.
+Replay returns an invalid result from the transaction rather than throwing: family revocation commits before HTTP 401.
+Its structured audit event contains only event name, family UUID and the public response correlationId, and is emitted after commit.
+Existing generation history is preserved; family revocation is authoritative without updating/deleting every generation.
+An already-issued access JWT still follows the existing active-user/expiry policy. Disabling a user is rechecked on refresh;
+family locking does not serialize an administrative account-status update, so in-flight checks remain snapshot-based.
 
 Authenticate active user, scope `projectId` to membership, then validate object IDs against project, role and write state. Foreign resources return 404; known project permission failure 403. Archived projects read-only for all members. Owner cannot inspect another user's private chat. Only Owner sets project metadata, membership, GitHub connection, backlog/decision approval, override and archive. Both roles may publish an approved task and access common knowledge. All workers recheck actor/scope/version before side effects; signed provider webhooks map only verified connected repos (system actor, not arbitrary user). Core row locks for project-state transitions; no RLS required MVP but DB constraints do not replace per-user guards.
 
@@ -51,7 +69,7 @@ Registration commits a salted Argon2id hash; duplicate `lower(email)` violations
 Login does one Argon2 verification for existing, inactive and unknown accounts (a random startup dummy hash for unknown accounts),
 then rechecks active/hash state inside the issuance transaction. Both refresh rows and JWT signing must succeed before credentials
 leave the transaction. Initial issuance uses parameterized JDBC participating in the JPA transaction and app-role grants;
-rotation, replay processing and logout are not exposed by these controllers.
+CORE-04 adds the separate refresh/logout controller and the family-locking service described above.
 
 Auth POST bodies are limited to 16 KiB before JSON parsing, including bodies without Content-Length. JSON unknown properties
 and scalar type coercion are rejected. Password bounds count Unicode code points and UTF-8 bytes; unpaired surrogates are invalid.
@@ -60,6 +78,13 @@ The single-instance MVP limiter uses 60-second windows: register 5/IP, login 20/
 It returns 429 with Retry-After, bounds state to 10,000 keys and fails closed when full. It uses the servlet remote address,
 not caller-supplied X-Forwarded-For. A reverse proxy must have an explicitly reviewed trusted-client-IP configuration;
 otherwise all proxy clients share an IP budget. Limits are in-memory and reset at restart; multi-instance/shared limits require deployment work.
+
+Refresh uses a separate bounded in-memory budget of 30 requests/60 seconds per usable family, shared across its rotations.
+Unknown/malformed credentials never allocate entries; replay revocation and logout bypass this budget so saturation cannot
+suppress security state changes. At 10,000 entries the oldest budget is evicted instead of globally denying unrelated families.
+This protects memory and availability but may relax rate enforcement under sustained capacity pressure; it is a single-instance
+MVP control, not distributed abuse protection. Failed rotation attempts after acquiring the budget also count. A 429 preserves
+the current cookie and DB generation state and includes Retry-After; clients must not automatically retry a successful/lost rotation.
 
 Keys load from externally mounted PKCS#8/X.509 PEM resources; startup rejects malformed, mismatched or <2048-bit pairs.
 Issuer, audience, exact HTTPS origins and key ID are mandatory configuration (see root README). Only the configured public key

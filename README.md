@@ -23,7 +23,7 @@ The project is being developed incrementally. **The PostgreSQL database foundati
 | SQL integrity tests, audits, and query benchmarks | Executed and documented |
 | Clean Docker-volume database initialization | Verified |
 | Spring Boot application bootstrap and database connection | Verified |
-| Registration, login, JWT and current user | CORE-02/03 implemented for external review; refresh rotation/logout remain CORE-04 |
+| Registration, login, JWT, current user, refresh rotation/replay and logout | CORE-02/03 merged; CORE-04 implemented for external review |
 | GitHub synchronization, AI orchestration, project-memory services | Planned / not yet implemented |
 | Trainable ML component and end-user interface | Planned / not yet implemented |
 
