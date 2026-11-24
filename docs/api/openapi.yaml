@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Team AI Orchestrator — Public REST API
   version: 0.1.0
-  description: Core & Access API contract. CSRF bootstrap, registration, login and current user are implemented
-    for CORE-02/03 review; refresh, logout and project/member routes remain planned. Deployment is not claimed.
+  description: Core & Access API contract. Authentication and current user are implemented through CORE-04
+    for external review; project/member routes remain planned. Deployment is not claimed.
 servers:
 - url: http://localhost:8080
   description: Proposed local API (use same-origin HTTPS/proxy for secure cookie flows)
@@ -514,7 +514,8 @@ paths:
       summary: Rotate refresh credential
       description: No JSON body. Atomically consume old refresh and issue replacement in the same family (absolute
         7-day lifetime); replay revokes family. Do not blindly retry; on invalid/expired/replayed credential
-        clear cookie and return 401. Requires CSRF.
+        clear refresh and CSRF cookies and return 401. Re-fetch CSRF before the next browser-auth POST.
+        Successful refresh retains the CSRF cookie. Requires CSRF and exact allowed Origin; a nonempty body returns 400.
       operationId: refresh
       security:
       - refreshCookie: []
@@ -525,6 +526,18 @@ paths:
       - DEC-02
       - FR-AUTH-003
       responses:
+        '400':
+          description: Request body must be empty; no session changes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
         '200':
           description: Rotated credential and new access token
           content:
@@ -677,7 +690,8 @@ paths:
       - Authentication
       summary: Logout
       description: Requires CSRF; refresh cookie optional. No request body, no bearer requirement. Existing
-        access JWT may remain valid until expiry; client clears it immediately.
+        access JWT may remain valid until expiry; client clears it immediately. Clears refresh and CSRF cookies;
+        re-fetch CSRF before the next browser-auth POST. A nonempty body returns 400 without revocation.
       operationId: logout
       security:
       - csrfCookie: []
@@ -686,6 +700,18 @@ paths:
       - FR-AUTH-003
       - DEC-02
       responses:
+        '400':
+          description: Request body must be empty; no session changes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
         '204':
           description: Refresh family revoked if present; cookie cleared. Idempotent even when no valid refresh
             cookie exists.
