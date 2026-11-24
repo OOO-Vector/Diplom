@@ -39,6 +39,25 @@ public abstract class PostgresTestSupport {
                     "/docker-entrypoint-initdb.d/002-init-roles.sh");
     static { DATABASE.start(); }
 
+    @org.junit.jupiter.api.AfterEach
+    void removeCommittedFixtures() throws Exception {
+        // Use only this disposable container's admin connection. App grants remain unchanged.
+        // Tests intentionally commit and exercise deferred constraints, so rollback fixtures are insufficient.
+        try (var connection = java.sql.DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword())) {
+            connection.setAutoCommit(false);
+            try (var statement = connection.createStatement()) {
+                statement.execute("set constraints all deferred");
+                statement.executeUpdate("delete from refresh_sessions");
+                statement.executeUpdate("delete from refresh_token_families");
+                statement.executeUpdate("delete from project_members");
+                statement.executeUpdate("delete from projects");
+                statement.executeUpdate("delete from users");
+            }
+            connection.commit();
+        }
+    }
+
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", DATABASE::getJdbcUrl);
