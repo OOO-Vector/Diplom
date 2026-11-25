@@ -21,7 +21,16 @@
   gap: calc(24 * var(--sidebar-unit));
   inline-size: calc(100% + 38 * var(--sidebar-unit));
   margin-inline: calc(-19 * var(--sidebar-unit));
+  padding-block: 0;
   padding-inline: calc(18 * var(--sidebar-unit));
+  white-space: nowrap;
+}
+
+.chat-sidebar__docs-icon {
+  display: block;
+  flex: none;
+  inline-size: calc(37 * var(--sidebar-unit));
+  block-size: calc(48 * var(--sidebar-unit));
 }
 
 .chat-sidebar__document-icon {
