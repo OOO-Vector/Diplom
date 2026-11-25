@@ -83,6 +83,16 @@ class ProjectServiceTests {
     }
 
     @Test
+    void getPreservesNotFoundResponseWhenCallerHasNoMembership() {
+        when(access.actor()).thenReturn(actor);
+        when(access.member(project.getId(), actor, false)).thenThrow(CoreException.missing());
+
+        var failure = assertThrows(CoreException.class, () -> service.get(project.getId()));
+
+        assertEquals(404, failure.status());
+    }
+
+    @Test
     void patchPreservesOmittedDescriptionAndClearsExplicitNull() {
         allowOwner();
         var rename = new UpdateProjectRequest();

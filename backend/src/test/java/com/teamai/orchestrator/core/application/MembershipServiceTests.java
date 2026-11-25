@@ -1,16 +1,19 @@
 package com.teamai.orchestrator.core.application;
 
 import com.teamai.orchestrator.core.api.AddMemberRequest;
+import com.teamai.orchestrator.core.api.MemberResponse;
 import com.teamai.orchestrator.core.domain.Project;
 import com.teamai.orchestrator.core.domain.ProjectMember;
 import com.teamai.orchestrator.core.domain.User;
 import com.teamai.orchestrator.core.persistence.ProjectMemberRepository;
 import com.teamai.orchestrator.core.persistence.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -129,6 +132,37 @@ class MembershipServiceTests {
         assertEquals(1, page.totalElements());
         verify(access).member(project.getId(), ownerId, false);
         verify(members, never()).page(any(), any());
+    }
+
+    @Test
+    void listsMembersFromRequestedPage() {
+        when(access.actor()).thenReturn(ownerId);
+        when(members.countInProject(project.getId())).thenReturn(2L);
+        var item = new MemberResponse(candidate.getId(), candidate.getDisplayName(), "member", now);
+        when(members.page(project.getId(), PageRequest.of(1, 1))).thenReturn(List.of(item));
+
+        var page = service.list(project.getId(), 1, 1);
+
+        assertEquals(List.of(item), page.items());
+        assertEquals(2, page.totalElements());
+        verify(access).member(project.getId(), ownerId, false);
+    }
+
+    @Test
+    void unavailableProjectAndMissingAccountReturnSamePublicErrorOnAdd() {
+        allowOwner();
+        var request = new AddMemberRequest(candidate.getEmail());
+        when(users.findByEmail(candidate.getEmail())).thenReturn(Optional.empty());
+        var missingAccount = assertThrows(CoreException.class, () -> service.add(project.getId(), request));
+
+        when(access.owner(project.getId(), ownerId)).thenThrow(CoreException.missing());
+        var missingProject = assertThrows(CoreException.class, () -> service.add(project.getId(), request));
+
+        assertEquals("USER_OR_PROJECT_NOT_FOUND", missingAccount.code());
+        assertEquals(missingAccount.code(), missingProject.code());
+        assertEquals(404, missingAccount.status());
+        assertEquals(404, missingProject.status());
+        verifyNoInteractions(members);
     }
 
     private void allowOwner() {
