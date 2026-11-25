@@ -13,7 +13,21 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. This starts the browser-only demo from the current terminal. Accounts and projects stay in browser storage across server restarts at the same URL. Keep the terminal open while working.
 
-For backend integration, run `npm run dev:backend`. Follow the [root setup](../README.md#local-setup) to start PostgreSQL and Spring Boot at port 8080. Use a backend revision that implements the auth and projects contracts. Set the backend variable `APP_ALLOWED_ORIGINS=http://127.0.0.1:5173` for this URL. Use the exact origin if the port or hostname differs. Vite proxies same-origin `/api` to `http://127.0.0.1:8080` by default. Copy `.env.example` to `.env.local` to change the proxy target.
+For backend integration, start PostgreSQL and Spring Boot as described in the [root setup](../README.md#local-setup). Set `APP_ALLOWED_ORIGINS=https://127.0.0.1:5173` in the backend environment before starting Spring Boot.
+
+From `frontend/`, create a locally trusted certificate for `127.0.0.1`. For example, with mkcert installed, run the following in PowerShell. Installing the local CA may prompt for OS approval.
+
+```powershell
+New-Item -ItemType Directory -Force .cert
+mkcert -install
+mkcert -cert-file .cert/local.pem -key-file .cert/local-key.pem 127.0.0.1
+```
+
+Copy `.env.example` to `.env.local` and set `API_PROXY_TLS_CERT=.cert/local.pem` and `API_PROXY_TLS_KEY=.cert/local-key.pem`. Run `npm run dev:backend` and open `https://127.0.0.1:5173`. Vite proxies same-origin `/api` to `http://127.0.0.1:8080` by default. If you use `localhost` instead, include it in the certificate and use the same exact HTTPS origin in the backend setting and browser.
+
+In backend mode, Project tasks uploads specifications to the API and reads the latest version and its extracted text from PostgreSQL. Local demo specifications remain in browser storage. GitHub repository access verification via PAT is available only in the local demo. The backend-mode screen shows GitHub App availability.
+
+Task decomposition currently builds a local draft from headings and lines. The task editor supports Epic → optional Story → Task → Subtask. Backlog edits, revision checks, dependency checks and approval operate in browser storage until the Planning API is available. The chat uses simulated replies, Decisions uses local conflict heuristics, and Analytics reports browser activity.
 
 To try registration, login, refresh, logout and project administration without Spring Boot, run `npm run dev:mock` and open the loopback URL shown by Vite. Use test data in this mode. The mock uses in-memory accounts, mock tokens, project metadata and memberships, all cleared when the process stops. Its refresh cookie uses `Secure`, so use loopback during development and HTTPS for a deployed backend.
 
@@ -28,9 +42,23 @@ npm run lint
 npm run format:check
 npm run typecheck
 npm test
+npm run test:coverage
+npx playwright install chromium
+npm run test:e2e
 npm run build
 npm run preview
 ```
+
+`npm run test:coverage` runs unit, component and integration tests, enforces 70% line coverage and writes HTML and Cobertura reports to `coverage/` and JUnit XML to `test-results/`. Playwright starts the local demo automatically and writes its HTML report to `playwright-report/`.
+
+For the same browser test against Spring Boot and PostgreSQL, start a disposable backend and the HTTPS frontend described above. In PowerShell, run:
+
+```powershell
+$env:E2E_BACKEND_URL = "https://127.0.0.1:5173"
+npm run test:e2e
+```
+
+Use a certificate trusted by Chromium. The test registers a synthetic account and creates a project with two specification versions. See the [testing strategy](../docs/testing/testing-strategy.md#frontend-verification-implemented-in-fe) for CI and coverage scope.
 
 Use `npm run format` to apply Prettier. Prettier checks authored files and skips the npm lockfile and generated output. TypeScript runs in strict mode. ESLint checks React Hooks, import cycles and layer boundaries. Explicit `any` is an error. Use `unknown` and narrow or validate external data. An exceptional suppression must be scoped to the affected line and explain the upstream type limitation.
 

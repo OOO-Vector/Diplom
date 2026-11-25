@@ -59,7 +59,7 @@ Opening a project lands on Tasks. Server-mode project creation opens Tasks. The 
 
 ### API and diagnostics
 
-Repository verification uses a separate GitHub HTTP client. `verifyGitHubRepository` makes a read-only `GET https://api.github.com/repos/{owner}/{repo}` request with the provided bearer token and a 15-second timeout. The controller uses the HTTP status and optional quota headers. It does not read or persist the response body.
+The local demo uses a separate GitHub HTTP client for repository verification. `verifyGitHubRepository` makes a read-only `GET https://api.github.com/repos/{owner}/{repo}` request with the provided bearer token and a 15-second timeout. The controller uses the HTTP status and optional quota headers. It does not read or persist the response body. The backend-mode settings keep the GitHub controls disabled until the GitHub App API is available.
 
 ```http
 GET /repos/example/project HTTP/1.1
@@ -79,7 +79,7 @@ Validation commands are in the [frontend guide](../../frontend/README.md#checks)
 
 ### Auth and project access
 
-The client follows `docs/api/openapi.yaml` and DEC-02 on the checked `origin/develop` revision (`c472aac`). All paths below are relative to `/api/v1`.
+The client follows the [OpenAPI contract checked into this branch](../api/openapi.yaml) and DEC-02. All paths below are relative to `/api/v1`.
 
 | Method and path | Request | Response |
 | --- | --- | --- |
@@ -87,7 +87,8 @@ The client follows `docs/api/openapi.yaml` and DEC-02 on the checked `origin/dev
 | `POST /auth/register` | CSRF header, `{"email":"name@example.test","displayName":"Name","password":"<user input>"}` | `201` with a User DTO. The UI returns to sign-in. |
 | `POST /auth/login` | CSRF header, email and password | `200` with `{"accessToken":"<jwt>","tokenType":"Bearer","expiresIn":900,"user":{…}}` and refresh cookie |
 | `POST /auth/refresh` | CSRF header and refresh cookie, empty body | `200` with the session DTO and rotated cookie, or `401 REFRESH_INVALID` |
-| `POST /auth/logout` | CSRF header and refresh cookie, empty body | `204` with cookies cleared |
+| `POST /auth/logout` | CSRF cookie and header, exact allowed Origin, empty body. The browser sends the refresh cookie when present. | `204` with cookies cleared |
+| `GET /users/me` | Access bearer token | `200` with the current User DTO. The current profile UI uses the User DTO from login or refresh. |
 | `GET /projects`, `GET /projects/{id}` | Access bearer token | Page of project entries or a project entry containing `id`, `name`, `status` and `myRole`. Unavailable projects return `404`. |
 | `POST /projects` | Access bearer token, `{"name":"Example project"}` | `201` with the newly created project |
 
@@ -118,9 +119,11 @@ Owner controls require an active project for metadata, membership, transfer and 
 
 The checked OpenAPI has no specification, decomposition operation, backlog or publication endpoints. The API tables for these capabilities below are proposals for future integration. The Tasks screen explicitly labels its browser-backed Planning preview. Decomposition uses a local text parser. The preview presents three timed stages for text extraction, decomposition and graph validation, with an elapsed timer. It displays the saved result or an error when finished. It pauses while the document is hidden and cancels scheduled work when the route unmounts. No server polling or percentage is displayed. When a server operation contract becomes available, polling should start at 2 seconds, back off to at most 5 seconds, and stop on terminal status, navigation or hidden-page policy.
 
-Specification versions and files are saved in one IndexedDB transaction per upload, with account/project isolation, version, author and upload time. UTF-8 TXT and text-layer PDF are limited to 10 MiB and 200,000 extracted characters. A new local decomposition references its source version and retains the previous backlog in history. The local editor checks the local revision before writing. The Tasks screen highlights cycles in the saved draft and disables confirmation until the graph is valid. The server will still need transactional revision checks and structured DAG problem details.
+In backend mode, the Tasks screen uploads UTF-8 TXT and text-layer PDF through the Specification API, loads the latest server version and reads the selected version's extracted text for local decomposition. The local demo saves versions and files in one IndexedDB transaction per upload, with account/project isolation. Both modes limit files to 10 MiB and extracted text to 200,000 characters. A new local decomposition references its source version and retains the previous backlog in history. The local editor checks the local revision before writing. The Tasks screen highlights cycles in the saved draft and disables confirmation until the graph is valid. The server will still need transactional revision checks and structured DAG problem details.
 
-Owner confirmation applies to the current valid revision. Edits to a confirmed unpublished backlog clear approval. Archived projects are read-only. Local records with publication already started lock structural editing and retain existing status badges and safe GitHub issue links. The publication button displays connection feedback inline while the publishing API is unavailable. Publishing, reconciling and retrying remote issues require an API contract.
+The local task editor follows DEC-07: an epic can contain stories or tasks, a story can contain tasks, and a task can contain subtasks. The UI stores `subtask` as a display kind. The Planning schema represents it as a `task` with a task parent.
+
+Local owner confirmation applies to the current valid revision. Edits to a confirmed unpublished backlog clear approval. The future Planning API must enforce permissions, revision checks, dependency validation and approval when saving. Archived projects are read-only. Local records with publication already started lock structural editing and retain existing status badges and safe GitHub issue links. The publication button displays connection feedback inline while the publishing API is unavailable. Publishing, reconciling and retrying remote issues require an API contract.
 
 ## Target architecture and planned API contracts
 
@@ -291,14 +294,14 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 
 ## 6. Backend REST API Interaction & Agreed Contracts
 
-> **Contract Sign-Off Section (`V-03`, `V-07`):** The endpoints, request payloads, and response schemas below establish the binding frontend–backend REST contract to be codified in `docs/api/openapi.yaml`. All timestamps are ISO-8601 UTC strings; all entity IDs are UUID v4 strings.
+The [checked-in OpenAPI contract](../api/openapi.yaml) defines the implemented Auth, Core and Specification operations. The remaining module tables describe planned contracts.
 
 ### 6.1 Common Conventions & Error Contract (RFC 9457 Problem Details)
 - **Base Path:** `/api/v1`
 - **Headers:**
   - `Authorization: Bearer <accessToken>` (on all protected endpoints)
   - `Content-Type: application/json` (or `multipart/form-data` for specification upload)
-  - `X-CSRF-TOKEN: <token>` (for cookie-backed `/auth/refresh` and `/auth/logout` per `DEC-02`)
+  - `X-CSRF-Token: <token>`, CSRF cookie and exact allowed Origin for all four auth POST operations per `DEC-02`.
 - **Standard Error Payload (`application/problem+json`):**
 ```json
 {
@@ -318,15 +321,16 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 
 ---
 
-### 6.2 Authentication & Session (`/api/v1/auth`)
+### 6.2 Authentication & Session
 
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
-| `POST /auth/register` | `{ "email": "string", "displayName": "string", "password": "string (min 8)" }` | `201 Created`: `{ "user": { "id": "uuid", "email": "string", "displayName": "string" } }` | `400` (validation), `409` (`EMAIL_ALREADY_EXISTS`) |
-| `POST /auth/login` | `{ "email": "string", "password": "string" }` | `200 OK` + `Set-Cookie: refresh_token=...; HttpOnly; Secure; SameSite=Lax`:<br>`{ "accessToken": "jwt", "expiresIn": 900, "user": { "id": "uuid", "email": "string", "displayName": "string" } }` | `401` (`INVALID_CREDENTIALS`), `429` (rate limit) |
-| `POST /auth/refresh` | Empty body (uses `HttpOnly` cookie) | `200 OK` + rotated `Set-Cookie`:<br>`{ "accessToken": "jwt", "expiresIn": 900, "user": { ... } }` | `401` (`REFRESH_INVALID`) |
-| `POST /auth/logout` | Empty body (uses `HttpOnly` cookie) | `204 No Content` (clears cookie & revokes DB refresh session) | `401` |
-| `GET /auth/me` | - | `200 OK`: `{ "id": "uuid", "email": "string", "displayName": "string" }` | `401` |
+| `GET /auth/csrf` | Browser request with credentials | `200` with `headerName: X-CSRF-Token`, `token` and the CSRF cookie | `403`, `429` |
+| `POST /auth/register` | `email`, `displayName`, `password` (12–128 Unicode code points and at most 512 UTF-8 bytes) | `201` with a User DTO directly | `400`, `403`, `409`, `429` |
+| `POST /auth/login` | `email`, `password` (1–128 code points and at most 512 UTF-8 bytes) | `200` with `accessToken`, `tokenType: Bearer`, `expiresIn: 900`, `user` and the Secure, HttpOnly, SameSite=Lax refresh cookie | `400`, `401 INVALID_CREDENTIALS`, `403`, `429`, `503` |
+| `POST /auth/refresh` | Empty body and refresh cookie | `200` with the same session DTO and a rotated refresh cookie | `400`, `401 REFRESH_INVALID`, `403`, `429`, `503` |
+| `POST /auth/logout` | Empty body; refresh cookie when present | `204`, clears cookies and revokes the associated refresh family when present | `400`, `403`, `429`, `503` |
+| `GET /users/me` | Access bearer token | `200` with a User DTO | `401`, `429` |
 
 ---
 
@@ -334,24 +338,30 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
-| `GET /projects` | Query: `?search=&page=0&size=20` | `200 OK`: `{ "items": [ { "id": "uuid", "name": "string", "description": "string", "status": "active\|archived", "currentUserRole": "OWNER\|MEMBER", "memberCount": 3, "updatedAt": "iso-utc" } ], "total": 1 }` | `401` |
-| `POST /projects` | `{ "name": "string (1..120)", "description": "string (0..1000)" }` | `201 Created`: `{ "id": "uuid", "name": "string", "description": "string", "status": "active", "currentUserRole": "OWNER", "createdAt": "iso-utc" }` | `400`, `401` |
-| `GET /projects/{projectId}` | - | `200 OK`: `{ "id": "uuid", "name": "string", "description": "string", "status": "active\|archived", "currentUserRole": "OWNER\|MEMBER", "githubConnection": { "status": "active\|disconnected\|error", "repositoryFullName": "org/repo" } \| null }` | `403`, `404` |
-| `PATCH /projects/{projectId}` | `{ "name"?: "string", "description"?: "string" }` | `200 OK`: updated Project DTO | `403` (Member), `409` (`PROJECT_ARCHIVED`) |
-| `POST /projects/{projectId}/archive` | Empty body | `200 OK`: `{ "id": "uuid", "status": "archived" }` | `403` (Member) |
-| `GET /projects/{projectId}/members` | - | `200 OK`: `{ "items": [ { "userId": "uuid", "email": "string", "displayName": "string", "role": "OWNER\|MEMBER", "joinedAt": "iso-utc" } ] }` | `403` |
-| `POST /projects/{projectId}/members` | `{ "email": "string" }` | `201 Created`: `{ "userId": "uuid", "email": "string", "displayName": "string", "role": "MEMBER", "joinedAt": "iso-utc" }` | `403` (Member), `404` (`USER_NOT_FOUND`), `409` (`ALREADY_MEMBER`) |
-| `DELETE /projects/{projectId}/members/{userId}` | - | `204 No Content` | `403`, `409` (`CANNOT_REMOVE_SOLE_OWNER`) |
-| `POST /projects/{projectId}/transfer-ownership` | `{ "newOwnerUserId": "uuid" }` | `200 OK`: `{ "previousOwnerId": "uuid", "newOwnerId": "uuid" }` | `403`, `400` (`TARGET_NOT_ACTIVE_MEMBER`) |
+| `GET /projects` | Query `page`, `size`, optional `status` (`active` or `archived`) | `200` with a page of projects visible to the caller | `400`, `401` |
+| `POST /projects` | Required `name` (1–150 code points) and optional nullable `description` (up to 4,000 code points) | `201` with a Project DTO and `Location`. The caller is the owner. | `400`, `401` |
+| `GET /projects/{projectId}` | Access bearer token | `200` with a Project DTO | `401`, `404` |
+| `PATCH /projects/{projectId}` | At least one of `name` or `description`; explicit `null` clears the description | `200` with the updated Project DTO | `400`, `403`, `404`, `409 PROJECT_ARCHIVED` |
+| `POST /projects/{projectId}/archive` | Empty body | `200` with a Project DTO whose status is `archived` | `400`, `403`, `404` |
+| `GET /projects/{projectId}/members` | Query `page` and `size` | `200` with a page of Member DTOs | `400`, `401`, `404` |
+| `POST /projects/{projectId}/members` | Registered account `email` | `201` with a Member DTO | `403`, `404 USER_OR_PROJECT_NOT_FOUND`, `409 MEMBERSHIP_CONFLICT` |
+| `DELETE /projects/{projectId}/members/{userId}` | Access bearer token | `204` | `403`, `404`, `409 MEMBERSHIP_CONFLICT` |
+| `POST /projects/{projectId}/transfer-ownership` | `newOwnerUserId` | `200` with a Project DTO reflecting the caller's new `myRole: member` | `400`, `403`, `404`, `409 OWNERSHIP_CONFLICT` |
+
+A Project DTO contains `id`, `name`, nullable `description`, `createdBy`, `status`, `myRole` (`owner` or `member`), `createdAt` and `updatedAt`. A Member DTO contains `userId`, `displayName`, `role` and `joinedAt`. Page responses use `items`, `page`, `size`, `totalElements` and `totalPages`. The dashboard applies its name filter in the browser. See OpenAPI for the complete set of error responses.
 
 ---
 
 ### 6.4 Specifications, AI Decomposition & Backlog (`/api/v1/projects/{projectId}/...`)
 
+The four specification operations below are implemented. The decomposition, operations and backlog rows describe planned contracts. The checked-in [OpenAPI contract](../api/openapi.yaml) is authoritative for the implemented operations.
+
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
-| `POST /specifications` | `multipart/form-data`: `file` (`.txt` or `.pdf`, $\le 10\text{ MiB}$), `title` (optional) | `201 Created`: `{ "id": "uuid", "version": 1, "fileName": "srs.pdf", "status": "processed", "charCount": 14500, "uploadedBy": { "id": "uuid", "displayName": "string" }, "createdAt": "iso-utc" }` | `400` (`SCANNED_PDF_NO_TEXT`, `EMPTY_FILE`), `413` (`FILE_TOO_LARGE`), `415` (`UNSUPPORTED_MEDIA_TYPE`) |
-| `GET /specifications` | - | `200 OK`: `{ "items": [ { "id": "uuid", "version": 1, "fileName": "string", "status": "uploaded\|processing\|processed\|failed", "createdAt": "iso-utc" } ] }` | `403` |
+| `POST /specifications` | Multipart `file` (TXT or PDF, at most 10 MiB) and required `title` | `201 Created` with version metadata including `id`, `originalFilename`, `version`, `uploadedBy` and `createdAt` | `400`, `401`, `404`, `409`, `413`, `415`, `422`, `429` |
+| `GET /specifications` | Query parameters `page` and `size` | `200 OK` with paginated version metadata, newest first | `400`, `401`, `404` |
+| `GET /specifications/{specId}` | - | `200 OK` with version metadata | `401`, `404` |
+| `GET /specifications/{specId}/text` | - | `200 OK` with UTF-8 plain text | `401`, `404` |
 | `POST /specifications/{specId}/decompose` | `{ "instructions"?: "string" }` | `202 Accepted`: `{ "operationId": "uuid", "type": "BACKLOG_DECOMPOSITION", "status": "queued" }` | `409` (`PROJECT_ARCHIVED`), `429` (`AI_QUOTA_EXCEEDED`) |
 | `GET /operations/{operationId}` | - | `200 OK`: `{ "operationId": "uuid", "type": "string", "status": "queued\|running\|completed\|failed", "stageLabel": "Validating DAG...", "resultResourceId": "uuid \| null", "error"?: { "code": "string", "detail": "string", "retryable": true }, "startedAt": "iso-utc", "completedAt": "iso-utc \| null" }` | `403`, `404` |
 | `GET /backlogs/current` | - | `200 OK`: `{ "id": "uuid", "specificationId": "uuid \| null", "specificationVersion": 1, "status": "draft\|approved\|published", "revision": 3, "dagValid": true, "tasks": [ { "id": "uuid", "parentId": "uuid \| null", "type": "epic\|story\|task", "title": "string", "description": "string", "acceptanceCriteria": ["string"], "priority": 2, "status": "draft\|ready\|in_progress\|in_review\|done\|cancelled", "blockedByTaskIds": ["uuid"], "githubIssue": { "number": 42, "url": "https://github.com/...", "syncStatus": "pending\|synced\|failed\|unknown" } \| null } ] }` | `404` (`NO_BACKLOG_YET` $\rightarrow$ renders Empty State) |
@@ -365,6 +375,8 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 ---
 
 ### 6.5 GitHub Integration (`/api/v1/projects/{projectId}/github`)
+
+These GitHub App operations describe the planned backend contract.
 
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
@@ -390,6 +402,8 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 
 ### 6.7 Grounded RAG Chat & Analytics (`/api/v1/projects/{projectId}/...`)
 
+These operations describe the planned server contract. The current chat generates demo replies in the browser. The Analytics screen displays browser-local metrics from the prototype.
+
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
 | `GET /chats` | - | `200 OK`: `{ "items": [ { "sessionId": "uuid", "title": "string", "updatedAt": "iso-utc" } ] }` (strictly caller's private sessions) | `403` |
@@ -403,11 +417,8 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 ## 7. Authentication, Error Handling, and Loading UX
 
 ### 7.1 Single-Flight Silent Token Refresh Flow
-To prevent race conditions when multiple TanStack Query requests simultaneously receive `401 Unauthorized` after the `15 min` access JWT expires:
-1. `httpClient.ts` intercepts any `401` response (excluding `/auth/login` and `/auth/refresh`).
-2. If a refresh request is not already in flight, it initiates a single `POST /api/v1/auth/refresh` promise and queues concurrent failed requests.
-3. On success, `useAuthStore` updates `accessToken`, and all queued requests are retried transparently with the new `Authorization: Bearer` header.
-4. On refresh failure (`401`/`403`), `useAuthStore.clearSession()` executes, the TanStack Query cache is cleared (`queryClient.clear()`), and the router redirects to `/login?reason=session_expired`.
+
+`authSession.request` refreshes an expired JWT before sending a protected request. Concurrent requests share the same in-tab refresh. After a protected request receives `401`, the session can refresh and replay a GET or HEAD once with the new Bearer token. Failed writes are surfaced to the caller for an explicit user retry. If refresh fails, the session closes and the route guard returns the user to sign-in.
 
 ### 7.2 Standardized Error Mapping
 - **`400 Bad Request` with `fieldErrors`:** Mapped directly into React Hook Form via `setError(field, { message })` so users see validation messages next to the offending input.
@@ -434,10 +445,12 @@ To maintain visual consistency with `Ilya_Yakubski_UX_specification.docx` and me
 
 ## 9. Frontend Testing Organization
 
-Frontend tests are co-located by responsibility and run automatically in GitHub Actions PR CI (`DEC-15`):
+The `Frontend quality` workflow is configured for PRs into `develop`, pushes to `FE` and `develop`, and manual dispatch. See the [testing strategy](../testing/testing-strategy.md#frontend-verification-implemented-in-fe) for execution evidence and commands.
 
 | Test Type | Location | Tools | Scope & Mocking Strategy |
 |---|---|---|---|
-| **Unit Tests** | `src/shared/**/*.test.ts` | Vitest | Pure functions: `metricFormat` (`null` $\rightarrow$ `N/A`), `problemDetails` parser, Zod schemas, `useProjectRole` permission matrix. |
-| **Component & Integration Tests** | `src/features/**/*.test.tsx` | Vitest + React Testing Library + MSW | Renders full feature pages/modals against Mock Service Worker (MSW) handlers simulating REST contracts, `401` refresh, `409` DAG cycle errors, Owner vs. Member RBAC visibility, and `N/A` analytics rendering. |
-| **End-to-End (E2E) Tests** | `tests/e2e/*.spec.ts` | Playwright | Full browser execution against the Docker Compose stack (PostgreSQL + Spring Boot + FastAPI ML + Vite/Nginx) validating `AC-01`–`AC-13` and viewport responsiveness (`1920×1080`, `1280×800`, `1024×768`). |
+| **Unit** | `src/**/*.test.ts`, `tests/authSession.test.ts` | Vitest | Session state, file validation, backlog rules and API request payloads. |
+| **Component and integration** | `tests/*.test.tsx`, `tests/authMock.test.ts` | Vitest, React Testing Library, Axios fixtures and Vite mock HTTP server | Routing, role-dependent controls, session refresh, membership errors and specification uploads. |
+| **Browser E2E** | `e2e/*.spec.ts` | Playwright and Chromium | Registration, project creation, two specification uploads, reload and sign-out in local demo. An isolated HTTPS backend can be selected explicitly. |
+
+MSW, accessibility automation, the complete Docker Compose E2E suite and browser tests for pending server modules are planned.

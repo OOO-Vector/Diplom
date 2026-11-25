@@ -14,6 +14,35 @@ This Testing Strategy defines the verification architecture, automation tooling,
 
 ## 2. Test Pyramid & Automation Tooling (`DEC-15`)
 
+### Frontend verification implemented in FE
+
+| Layer | Scenarios | Tools |
+|---|---|---|
+| Unit | Session state, document validation, task hierarchy and dependency cycles, local persistence, API payloads | Vitest, fake-indexeddb, controlled clocks and fixtures |
+| Component and feature integration | Routing, project roles, membership removal recovery, specification upload and error handling | React Testing Library, Axios transport fixtures, Vite mock HTTP server |
+| Browser E2E | Register, create a project, upload two specification versions, reload, sign out and verify the session remains closed | Playwright and Chromium |
+
+Axios fixtures let the React integration tests exercise the authenticated API client and UI together while controlling responses. The browser scenario runs against Vite in local-demo mode in CI and can also target an isolated HTTPS stack with Spring Boot and PostgreSQL. The complete diagrams and acceptance scenarios below describe the target test architecture. MSW, full-stack CI and tests for pending server modules remain planned.
+
+From `frontend/` run:
+
+```powershell
+npm ci
+npm run lint
+npm run build
+npm run test:coverage
+npx playwright install chromium
+npm run test:e2e
+```
+
+To test against the real API, start the isolated backend and the HTTPS frontend using the [frontend setup](../../frontend/README.md#run-locally). Set `E2E_BACKEND_URL` to the running frontend origin, then run `npm run test:e2e`. The browser must trust that endpoint's certificate. This test creates a synthetic user and project, so use a disposable database.
+
+`Frontend quality` runs the commands on Ubuntu, records test results in the job log and uploads Vitest JUnit, coverage HTML/Cobertura/JSON and the Playwright report. Coverage applies to all TypeScript and TSX under `src`, including untested source files, and the job fails below 70% line coverage. Browser traces are retained on failure. Use the report from the matching commit when citing results.
+
+The verified local FE baseline is **49 passing Vitest tests**, **87.27% line coverage (5,494 of 6,295)** and **one passing Chromium E2E scenario in local-demo mode**. ESLint, TypeScript and the production build also passed. This baseline comes from a clean local dependency install. A successful GitHub Actions run for these frontend changes and a successful browser run against Spring Boot and PostgreSQL still need to be recorded.
+
+Known gaps include real HTTPS session and upload verification with PostgreSQL, automated accessibility and coverage of server workflows as their APIs become available. The local demo browser test verifies user interaction and browser storage. The Axios fixture tests verify how the app uses API responses and presents their errors.
+
 ```text
                     / \
                    /E2E\          Playwright (Full Docker Compose stack: AC-01..AC-13)
@@ -30,7 +59,7 @@ This Testing Strategy defines the verification architecture, automation tooling,
 |---|---|---|---|---|
 | **Java Backend (Spring Boot 4 / Java 21)** | JUnit 5, AssertJ, MockMvc, REST Assured | Mockito, WireMock / fake `LlmProvider` & `GitHubClient` ports | Testcontainers (`pgvector/pgvector:pg16`), isolated test DB | **JaCoCo** |
 | **PostgreSQL Schema & SQL Integrity** | JUnit 5 JDBC / Liquibase runner + SQL test suite | Clean Docker volume per run | PostgreSQL 16 + pgvector (`0.8.7`) | Liquibase `validate` + SQL assertion suite |
-| **Frontend (React 18 / TypeScript)** | Vitest, React Testing Library, `@testing-library/user-event` | Mock Service Worker (**MSW** v2) | `jsdom` environment | **`@vitest/coverage-v8`** |
+| **Frontend (React 18 / TypeScript)** | Vitest, React Testing Library | Axios fixtures and Vite mock server. MSW is planned. | `jsdom` environment | **`@vitest/coverage-v8`** |
 | **Python ML Service (FastAPI / PyTorch)** | Pytest, `httpx` / FastAPI `TestClient` | Deterministic synthetic tensors & fixture artifacts | CPU-only isolated Python environment | **`coverage.py` (`pytest-cov`)** |
 | **End-to-End (Full Stack)** | **Playwright** (Chromium) | Stubbed external OpenAI/GitHub HTTP endpoints (plus separate manual live smoke test) | Full `docker-compose.test.yml` stack | Scenario traceability (`AC-01`–`AC-13`) |
 
@@ -59,8 +88,8 @@ This Testing Strategy defines the verification architecture, automation tooling,
   - Clean-volume execution of all Liquibase changesets (`001-`021`) and `spring.jpa.hibernate.ddl-auto=validate` (`NFR-MNT-003`).
   - Database triggers and constraints: sole project `Owner` invariant (`BR-002`), recursive CTE parent/dependency cycle rejection (`GAP-01`), partial unique index ensuring $\le 1$ `accepted` ADR version per decision (`GAP-02`), and durable `outbox_events` lease claiming/expiration recovery (`GAP-11`).
   - `pgvector` cosine similarity retrieval (`FR-CE-01`): verifying project isolation, exclusion of `superseded`/`proposed` ADR versions, and embedding model/dimension compatibility checks (`GAP-03`).
-- **Frontend Feature Integration (`Vitest` + `RTL` + `MSW`):**
-  - Complete screen flows (`SCR-01`-`SCR-06`) with realistic JSON payloads, testing loading skeletons, empty states, form submission, optimistic/invalidated cache updates, and `401` single-flight token refresh.
+- **Frontend Feature Integration (`Vitest` + `RTL`):**
+  - Implemented flows use Axios fixtures and a Vite mock HTTP server. They include session refresh, project routing, membership controls and upload outcomes. MSW and broader scenario coverage are planned.
 
 ### 3.3 API & Contract Testing
 - **Objective:** Verify HTTP status codes, request validation, RFC 9457 Problem Details structure, RBAC enforcement, and DTO parity between frontend and backend (`NFR-TST-003`, `NFR-MNT-007`).
@@ -80,7 +109,7 @@ This Testing Strategy defines the verification architecture, automation tooling,
 ### 3.5 End-to-End (E2E) Testing
 - **Objective:** Validate complete, multi-step user journeys from browser interaction through REST API, PostgreSQL, and ML inference (`NFR-TST-004`).
 - **Tool:** **Playwright** running headless Chromium against an isolated Docker Compose test environment with deterministic LLM/GitHub stubs.
-- **Mandatory E2E Suites:**
+- **Target full-stack E2E suites:**
   - `E2E-01` (`AC-01`, `AC-03`, `AC-04`, `AC-06`): Register $\rightarrow$ Create Project $\rightarrow$ Upload `.txt`/`.pdf` spec $\rightarrow$ Poll AI Decomposition $\rightarrow$ Edit Task & AC $\rightarrow$ Owner Approves Backlog.
   - `E2E-02` (`AC-05`): Attempt to add a cyclic `blocked-by` edge in `SCR-02` $\rightarrow$ Verify red cycle banner, disabled `Confirm` button, and intact graph after reload.
   - `E2E-03` (`AC-07`): Connect mock GitHub repo $\rightarrow$ Publish approved tasks $\rightarrow$ Verify Issue `#` links $\rightarrow$ Trigger duplicate publish / simulated timeout $\rightarrow$ Verify reconciliation without duplicate Issues.
@@ -89,7 +118,7 @@ This Testing Strategy defines the verification architecture, automation tooling,
   - `E2E-06` (`AC-12`): Open Analytics (`SCR-04`) $\rightarrow$ Verify `Accepted`/`Modified`/`Rejected` counts, `N/A` for unmeasured timings, and live polling update after completing a review.
 
 ### 3.6 Negative, Security & Resilience Testing
-Every negative scenario below is automated and tracked as a mandatory release gate (`NFR-SEC-003`, `NFR-REL-008`, `AC-02`, `AC-05`, `AC-18`, `AC-19`):
+The following negative scenarios are release targets (`NFR-SEC-003`, `NFR-REL-008`, `AC-02`, `AC-05`, `AC-18`, `AC-19`). Track implementation and run evidence separately for each scenario.
 
 | Category | Test Case ID | Negative / Failure Condition | Expected System Behavior |
 |---|---|---|---|
@@ -117,13 +146,13 @@ To satisfy the binding requirement of **at least 70% automated line coverage** (
 | Stack | Measurement Tool | CI Command | Minimum Target | Included Scope (Numerator / Denominator) | Documented Exclusions |
 |---|---|---|---:|---|---|
 | **Backend (Java 21)** | **JaCoCo** (`jacocoTestReport` + `jacocoTestCoverageVerification`) | `./gradlew test jacocoTestReport jacocoTestCoverageVerification` | **$\ge 70.0\%$ Line Coverage** (Binding `NFR-TST-001`) | `com.teamai.orchestrator.{auth,project,planning,memory,conflict,github,chat,analytics,orchestration}.**` (services, controllers, validators, security guards, mappers) | Main application entrypoint (`*Application.class`), Lombok-generated boilerplate (`@Data`/`@Builder`), pure JPA `@Entity` getters/setters, static config/DTO records. |
-| **Frontend (TypeScript)** | **`@vitest/coverage-v8`** | `npm run test:coverage` | **$\ge 70.0\%$ Line Coverage** (Team target) | `src/features/**`, `src/shared/hooks/**`, `src/shared/utils/**`, `src/shared/api/**` | Static icon wrappers, Shadcn/Radix primitive re-exports (`src/shared/components/ui/**`), `main.tsx`, type definition files (`*.d.ts`). |
+| **Frontend (TypeScript)** | **`@vitest/coverage-v8`** | `npm run test:coverage` | **70% line coverage** | All `src/**/*.ts` and `src/**/*.tsx`, including pages and entrypoint | Co-located test files and type declarations |
 | **Python ML Service** | **`coverage.py` (`pytest-cov`)** | `pytest --cov=src --cov-report=xml --cov-fail-under=70` | **$\ge 70.0\%$ Line Coverage** (Team target) | `ml/src/features/**`, `ml/src/inference/**`, `ml/src/validation/**` | Exploratory Google Colab `.ipynb` notebooks (`ml/notebooks/**`), plotting scripts. |
 
 ### 4.2 CI Coverage Proof & Auditability
-1. Every Pull Request into `develop` runs the GitHub Actions workflow `.github/workflows/ci.yml`.
+1. Pull requests into `develop` use the separate `backend-quality.yml` and `frontend-quality.yml` workflows.
 2. `jacocoTestCoverageVerification` fails the build automatically if core backend line coverage drops below `0.70`.
-3. CI uploads HTML/XML coverage artifacts (`jacocoHtml`, `vitest-coverage`, `python-coverage`) and posts a summary table of **covered lines / total lines = %** in the PR check summary so the exact numerator and denominator are preserved as academic evaluation evidence (`NFR-TST-001`).
+3. The frontend workflow uploads `frontend-quality-<sha>` and records **covered lines / total lines = %** in the job summary. The backend workflow uploads its own JaCoCo and JUnit reports. Python coverage artifacts are part of the target pipeline.
 
 ---
 
@@ -138,7 +167,7 @@ To satisfy the binding requirement of **at least 70% automated line coverage** (
 ## 6. Test Results Reporting, Traceability & Defect Management (`NFR-TST-006`, `NFR-TST-007`)
 
 ### 6.1 Recording Test Results
-- **Automated CI Evidence:** Every commit and PR stores JUnit XML test reports, JaCoCo/Vitest/Coverage.py reports, and Playwright HTML reports (including failure screenshots and traces) as timestamped GitHub Actions artifacts tied to the exact Git SHA.
+- **Automated CI Evidence:** Configured workflow runs publish available JUnit and coverage reports as GitHub Actions artifacts tied to the Git SHA. The frontend artifact includes the Playwright HTML report and traces from failed browser tests.
 - **Requirements Traceability Matrix (`docs/testing/traceability-matrix.md`):** Maintained across development to map `FR-*` / `NFR-*` / `AC-01`-`AC-20` $\rightarrow$ Automated Test Method / Playwright Spec ID $\rightarrow$ Latest CI Run Status (`PASS` / `FAIL` / `PLANNED`). Historical static reports (such as the earlier 78 SQL checks in `Database_Test_Report.md`) are explicitly distinguished from current full-stack CI runs (`SRS §18.4`).
 
 ### 6.2 Defect Classification & Resolution Workflow
