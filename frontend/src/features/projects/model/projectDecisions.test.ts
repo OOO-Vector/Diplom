@@ -1,5 +1,40 @@
 import { expect, it } from "vitest";
-import { checkProposal, type ProjectDecision } from "./projectDecisions";
+import {
+  checkProposal,
+  readProjectDecisions,
+  type ProjectDecision,
+} from "./projectDecisions";
+import { workspaceKey } from "../../account/accountWorkspace";
+
+it("reads legacy revision requests separately from superseded decisions", () => {
+  const projectId = "legacy-decisions";
+  const key = workspaceKey(`team-ai.decisions:${projectId}`);
+  const decision = {
+    title: "Proposal",
+    rationale: "Reason",
+    decision: "Decision",
+    status: "superseded",
+  };
+  localStorage.setItem(
+    key,
+    JSON.stringify([
+      { ...decision, id: "revision", revisionNote: "Clarify the scope." },
+      { ...decision, id: "superseded" },
+    ]),
+  );
+  try {
+    expect(readProjectDecisions(projectId)).toMatchObject([
+      {
+        id: "revision",
+        status: "revision_requested",
+        revisionNote: "Clarify the scope.",
+      },
+      { id: "superseded", status: "superseded" },
+    ]);
+  } finally {
+    localStorage.removeItem(key);
+  }
+});
 
 it("distinguishes an explicit conflict, a matching decision and insufficient context", () => {
   const approved: ProjectDecision = {

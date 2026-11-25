@@ -764,19 +764,12 @@ it("opens Decisions with a collapsed sidebar and mutually exclusive filters", as
   expect(
     screen.getByRole<HTMLButtonElement>("button", { name: "Reject" }).disabled,
   ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Request revision" }));
-  const memberRequest = screen.getByRole("dialog", {
+  const memberRequest = screen.getByRole<HTMLButtonElement>("button", {
     name: "Request revision",
   });
-  fireEvent.change(within(memberRequest).getByRole("textbox"), {
-    target: { value: "Add implementation details." },
-  });
-  fireEvent.click(
-    within(memberRequest).getByRole("button", {
-      name: "Send revision request",
-    }),
-  );
-  expect(screen.getByText("Add implementation details.")).toBeTruthy();
+  expect(memberRequest.disabled).toBe(true);
+  fireEvent.click(memberRequest);
+  expect(screen.queryByRole("dialog", { name: "Request revision" })).toBeNull();
 });
 
 it("lets the project owner approve, reject and request a revision", async () => {
@@ -815,6 +808,8 @@ it("lets the project owner approve, reject and request a revision", async () => 
     within(revision).getByRole("button", { name: "Send revision request" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Superseded" }));
+  expect(screen.queryByText("Clarify the scope.")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Revision requested" }));
   expect(screen.getByText("Clarify the scope.")).toBeTruthy();
   expect(screen.getByText("Saved check")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "ADR-001: First" })).toBeNull();

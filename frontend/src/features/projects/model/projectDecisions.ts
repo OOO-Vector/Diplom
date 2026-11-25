@@ -14,7 +14,13 @@ export type ProposalDraft = z.infer<typeof draftSchema>;
 
 const decisionSchema = draftSchema.extend({
   id: z.string(),
-  status: z.enum(["proposed", "approved", "superseded", "rejected"]),
+  status: z.enum([
+    "proposed",
+    "approved",
+    "revision_requested",
+    "superseded",
+    "rejected",
+  ]),
   number: z.number().int().positive().optional(),
   author: z.string().optional(),
   authorId: z.string().optional(),
@@ -60,7 +66,7 @@ export function canReviseProposal(
   proposal: ProjectDecision | undefined,
 ): proposal is ProjectDecision {
   return Boolean(
-    proposal?.status === "superseded" &&
+    proposal?.status === "revision_requested" &&
     proposal.revisionNote &&
     (proposal.authorId
       ? proposal.authorId === localAuthorId()
@@ -76,6 +82,11 @@ export function readProjectDecisions(projectId: string): ProjectDecision[] {
     const occupied = new Set(decisions.map(({ number }) => number));
     let number = 1;
     return decisions
+      .map((entry): ProjectDecision =>
+        entry.status === "superseded" && entry.revisionNote?.trim()
+          ? { ...entry, status: "revision_requested" }
+          : entry,
+      )
       .reverse()
       .map((entry) => {
         if (entry.number) return entry;
@@ -123,7 +134,7 @@ export function submitProjectProposal(
   localStorage.setItem(key(projectId), JSON.stringify([entry, ...proposals]));
 }
 
-type ReviewStatus = Exclude<ProjectDecision["status"], "proposed">;
+export type ReviewStatus = "approved" | "revision_requested" | "rejected";
 
 export function reviewProjectProposal(
   projectId: string,
@@ -135,7 +146,7 @@ export function reviewProjectProposal(
   const target = proposals.find((proposal) => proposal.id === id);
   if (
     target?.status !== "proposed" ||
-    (status === "superseded" && !revisionNote?.trim())
+    (status === "revision_requested" && !revisionNote?.trim())
   )
     return proposals;
   const next = proposals.map((proposal) =>
@@ -145,7 +156,7 @@ export function reviewProjectProposal(
   );
   localStorage.setItem(key(projectId), JSON.stringify(next));
   if (
-    status === "superseded" &&
+    status === "revision_requested" &&
     canReviseProposal(next.find((proposal) => proposal.id === id))
   ) {
     receiveNotification({

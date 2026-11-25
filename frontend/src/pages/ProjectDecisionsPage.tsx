@@ -7,6 +7,7 @@ import {
   readProjectDecisions,
   reviewProjectProposal,
   type ProjectDecision,
+  type ReviewStatus,
 } from "../features/projects/model/projectDecisions";
 import "./ProjectDecisionsPage.css";
 
@@ -14,6 +15,7 @@ const filters = [
   { value: "all", label: "All" },
   { value: "approved", label: "Active approved" },
   { value: "proposed", label: "Proposed" },
+  { value: "revision_requested", label: "Revision requested" },
   { value: "superseded", label: "Superseded" },
 ] as const;
 
@@ -21,6 +23,7 @@ type Filter = (typeof filters)[number]["value"];
 const statusLabels = {
   proposed: "Proposed",
   approved: "Approved",
+  revision_requested: "Revision requested",
   superseded: "Superseded",
   rejected: "Rejected",
 };
@@ -106,10 +109,10 @@ export default function ProjectDecisionsPage() {
 
   function review(
     id: string,
-    status: "approved" | "superseded" | "rejected",
+    status: ReviewStatus,
     note?: string,
   ) {
-    if (archived || (!isProjectOwner && status !== "superseded")) return;
+    if (archived || !isProjectOwner) return;
     try {
       setDecisions(reviewProjectProposal(projectId, id, status, note));
       setError("");
@@ -213,7 +216,7 @@ export default function ProjectDecisionsPage() {
                         </blockquote>
                       ))}
                     </dd>
-                    {revisionNote && (
+                    {status === "revision_requested" && revisionNote && (
                       <>
                         <dt>Revision requested:</dt>
                         <dd>{revisionNote}</dd>
@@ -236,8 +239,9 @@ export default function ProjectDecisionsPage() {
                     <button
                       className="project-decisions__button"
                       type="button"
-                      disabled={archived || status !== "proposed"}
+                      disabled={!canReview}
                       onClick={() => {
+                        if (!canReview) return;
                         setError("");
                         setRevision(entry);
                       }}
@@ -273,7 +277,7 @@ export default function ProjectDecisionsPage() {
           </p>
         )}
       </div>
-      {!archived && revision && (
+      {!archived && isProjectOwner && revision && (
         <RevisionDialog
           title={revision.title}
           error={error}
@@ -281,7 +285,7 @@ export default function ProjectDecisionsPage() {
             setRevision(null);
             setError("");
           }}
-          onSubmit={(note) => review(revision.id, "superseded", note)}
+          onSubmit={(note) => review(revision.id, "revision_requested", note)}
         />
       )}
     </section>
