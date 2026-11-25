@@ -111,7 +111,8 @@ digest, lifetime and replacement constraints; commit-time FK rollback; actual ap
 and old/current-generation lock contention with committed revocation visibility.
 This does not run the 78 historical SQL checks or production auth flows; DB-014 remains separate work.
 
-`schemaTest` is explicit, not part of ordinary `test`/`check`; CI must invoke it directly.
+`schemaTest` runs through `gradlew check` and is also invoked explicitly in CI.
+The task includes the separate SQL integrity suite. See the root README for its per-script logs.
 Local XML: `backend/build/test-results/schemaTest/`.
 Local HTML: `backend/build/reports/tests/schemaTest/index.html`.
 Generated results are ignored by Git; report run outcomes in [Issue #14](https://github.com/OOO-Vector/Diplom/issues/14)

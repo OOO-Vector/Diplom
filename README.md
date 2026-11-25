@@ -208,7 +208,13 @@ On Linux use `./gradlew` with the same arguments. `./gradlew check bootJar` also
 it generates temporary RSA keys and credentials, independent of the local `.env` and development database.
 `securitySpike` is the isolated SET-01 library suite; `schemaTest` verifies clean install, 001–012 upgrade and 013 constraints/grants.
 Docker must be running. Reports remain local under `backend/build/reports/tests/` and are ignored by Git.
-These suites do not rerun all 78 historical SQL checks tracked separately by DB-014.
+The `schemaTest` suite also runs all 78 SQL integrity checks from `database/tests/` against a separate, freshly migrated
+PostgreSQL container. Each script must exit successfully and emit its expected number of PASS notices.
+Run only this suite from `backend/` with `./gradlew schemaTest --tests '*SqlIntegrityTests'`
+(use `gradlew.bat` on Windows). Raw per-script logs are written to `backend/build/reports/sql-integrity/`
+and uploaded by CI. The concurrent project and refresh-session scenarios run in `test`, and the refresh family
+row-lock scenario runs in `schemaTest`. The manual ownership and outbox scenarios in the Database report are
+separate from the 78 checks. SQL script 009 only prepares fixtures for manual concurrency checks.
 
 Tests run sequentially in one worker; race tests create their own concurrent requests and synchronize through PostgreSQL
 lock observations, not arbitrary sleeps. Committed Core fixtures are deleted after each integration test using only the
@@ -249,7 +255,7 @@ A clean PostgreSQL instance, initialized on a separate Docker volume, was used t
 That historical result covers 001–012. For migration 013, run `gradlew.bat schemaTest` from `backend/`
 (JDK 21 and Docker required). It applies real Liquibase migrations on isolated PostgreSQL 16/pgvector Testcontainers,
 checks clean installation and a populated 001–012 upgrade, constraints, grants and family locking.
-It never starts the Spring application or connects to the configured development database. DB-014 and the full 78-check rerun remain separate work.
+It never starts the Spring application or connects to the configured development database. DB-014 tracks acceptance evidence separately.
 
 For an **isolated** database-initialization check, the repository includes `compose.repro.yaml`, which binds PostgreSQL to port **5434** and uses a separate Docker volume. It is not the normal development environment. The database test report documents the recorded verification evidence and limitations.
 

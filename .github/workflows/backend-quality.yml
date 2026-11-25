@@ -34,5 +34,6 @@ jobs:
             backend/build/test-results/
             backend/build/reports/jacoco/
             backend/build/reports/contracts/
+            backend/build/reports/sql-integrity/
           if-no-files-found: warn
           retention-days: 14
