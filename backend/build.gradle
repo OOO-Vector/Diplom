@@ -24,6 +24,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 	implementation 'org.bouncycastle:bcprov-jdk18on:1.87'
+	implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 	testImplementation 'org.testcontainers:testcontainers-postgresql'
 	testImplementation 'com.atlassian.oai:swagger-request-validator-core:2.46.1'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'

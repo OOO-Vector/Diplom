@@ -51,6 +51,7 @@ public abstract class PostgresTestSupport {
                 statement.executeUpdate("delete from refresh_sessions");
                 statement.executeUpdate("delete from refresh_token_families");
                 statement.executeUpdate("delete from project_members");
+                statement.executeUpdate("delete from specifications");
                 statement.executeUpdate("delete from projects");
                 statement.executeUpdate("delete from users");
             }
