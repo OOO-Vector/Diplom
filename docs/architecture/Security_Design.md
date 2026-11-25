@@ -4,6 +4,24 @@
 
 ## 1. Trust boundaries and threat model
 
+Specification import uses the bearer-only project chain. POST `/api/v1/projects/{projectId}/specifications` accepts
+raw TXT/PDF bytes with title/filename query metadata; it has a separate 10 MiB streaming bound and is the sole exception
+to the project JSON 32 KiB filter. Authentication and membership/state prechecks precede reading the stream. Both Owner
+and Member may import; a second membership/state check runs under the project row lock before allocating `max(version)+1`
+and inserting. Extraction holds no DB transaction/row lock. All metadata/text reads scope both project and specification ID.
+History is append-only through this application API; existing 011 grants still allow UPDATE/DELETE at the database role level.
+
+PDFBox 3.0.8 runs strict parsing, rejects encryption and image-only documents, and never renders pages, executes scripts,
+performs OCR or follows document instructions. TXT uses strict UTF-8 decoding; text limits count Unicode code points.
+PDF extraction uses LF separators on all operating systems; TXT preserves its original line endings (a leading BOM is removed).
+The extractor admits two concurrent imports per process, limits output to 200000 characters, PDF pages to 1000 and glyphs
+to 400000 and operators to 1000000, and checks a cooperative 10-second budget at page/glyph/operator boundaries. Its PDF stream scratch cache is limited to
+1 MiB memory / 64 MiB total and closed with the document. Original uploads are not stored. Parser diagnostics are disabled
+because third-party messages may contain document-controlled values. No extracted text is logged by the import service.
+These bounds are not a hard CPU/heap sandbox: PDF parsing/decompression/font handling may run between checkpoints;
+network read deadlines, proxy limits and stronger process isolation remain deployment concerns. Plain-text retrieval uses
+UTF-8, no-store and nosniff; consumers must render text safely rather than interpret it as HTML or trusted LLM instructions.
+
 Browser → same-origin HTTPS proxy → Java. Java → private PG, internal ML, external OpenAI/GitHub; only Java can access provider credentials. Treat user input, uploaded documents, LLM output, webhook payload and model metadata as untrusted. Actors: anonymous attacker, authenticated nonmember, malicious member, compromised browser/refresh token, unreliable/malicious external data. Threats: credential stuffing, token replay, CSRF/XSS, IDOR, privilege escalation, cross-project retrieval, injection, secrets leakage, webhook forgery, job replay and resource exhaustion.
 
 ## 2. Authentication and session protocol
@@ -59,7 +77,7 @@ The add-member contract uses USER_OR_PROJECT_NOT_FOUND for unavailable accounts/
 reading permissions/status, so competing ownership transfers cannot authorize from the previous Owner's stale role.
 Read checks and page/count queries share a REPEATABLE READ snapshot; administrative user status changes are not serialized
 with project locks. Updates to an account after the active-user check can affect subsequent requests rather than cancel an in-flight one.
-Bodies for project POST/PATCH/DELETE are capped at 32 KiB after bearer authorization, before parsing; unknown fields and
+Bodies for project POST/PATCH/DELETE (except the bounded raw specification upload described above) are capped at 32 KiB after bearer authorization, before parsing; unknown fields and
 scalar coercion are rejected. This is an input bound, not a claim of load-tested service-wide abuse protection.
 
 | Boundary | Controls and tests |

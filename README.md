@@ -197,6 +197,18 @@ For detailed design and evidence, see:
 
 ## Testing and Reproducibility
 
+Specification import is implemented under `planning/` on the existing `specifications` table (migration 004; grants 011).
+POST `/api/v1/projects/{projectId}/specifications?title=...&filename=...` accepts raw `text/plain` UTF-8 or `application/pdf`
+bytes, not multipart. It returns 201 metadata and Location after commit. GET the collection for paginated version history,
+GET `/{specificationId}` for metadata, or GET `/{specificationId}/text` for UTF-8 text. See the OpenAPI for limits/errors.
+Owner and Member can upload to active projects; archived projects remain readable. Versions are allocated serially under
+the existing project row lock and never overwritten by the application. No new migrations or role grants are needed.
+The existing role can still UPDATE/DELETE specifications through direct SQL; immutability here is an application guarantee.
+No decomposition, AI calls or backlog changes are performed. Upload retries create another version after a successful commit.
+`SpecificationTests` exercises real PostgreSQL persistence, history, rollback, access, PDF/TXT validation and lock contention;
+small PDFs are generated entirely from committed synthetic test code. No user documents or generated uploads are committed.
+The Core coverage threshold remains scoped to Core; the full JaCoCo report also includes the new Planning module.
+
 From `backend/`, with JDK 21, Docker and Node.js 24 (for the pinned contract validator), run:
 
 ```powershell

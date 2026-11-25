@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Core & Access API contract. Authentication and current user are implemented through CORE-04;
     project/member routes are implemented for CORE-05/06 external review. Project POST/PATCH/DELETE request bodies
-    are limited to 32 KiB. Framework-level method/content negotiation failures use the Problem schema
+    are limited to 32 KiB except raw specification uploads (10 MiB). Framework-level method/content negotiation failures use the Problem schema
     (405 METHOD_NOT_ALLOWED with Allow; 406 NOT_ACCEPTABLE). Unknown nested routes use 404 NOT_FOUND;
     authenticated routes outside the allowlist use 403 FORBIDDEN. Deployment is not claimed.
 servers:
@@ -17,6 +17,7 @@ tags:
 - name: Users
 - name: Projects
 - name: Members
+- name: Specifications
 paths:
   /api/v1/auth/csrf:
     get:
@@ -2171,7 +2172,156 @@ paths:
         type: string
         format: uuid
       example: 87ee2164-7607-494f-8806-04f9368edd62
+  /api/v1/projects/{projectId}/specifications:
+    parameters:
+    - $ref: '#/components/parameters/SpecificationProjectId'
+    post:
+      tags: [Specifications]
+      operationId: uploadSpecification
+      summary: Import an immutable specification version
+      description: >-
+        Owner or Member of an active project. Raw file bytes, not multipart or JSON.
+        Required title and filename query parameters are metadata only; duplicate/unknown parameters are rejected.
+        Actor and version are server assigned.
+        At most 10 MiB and 200000 extracted Unicode code points. UTF-8 TXT (optional BOM) or text-layer PDF only;
+        filename extension and media type must agree with validated content. No OCR or execution of document instructions.
+        Filenames are reduced to a basename; control/format and unsafe filename punctuation are replaced with underscores.
+        Invalid/empty/encrypted/image-only documents return 400 INVALID_SPECIFICATION. Invalid metadata returns 400 VALIDATION_ERROR.
+        File size returns 413 PAYLOAD_TOO_LARGE; text length returns 413 SPECIFICATION_TEXT_TOO_LARGE.
+        Archived projects return 409 PROJECT_ARCHIVED; exhausted integer versions return 409 SPECIFICATION_VERSION_LIMIT.
+        PDF processing bounds (1000 pages, 400000 glyphs, 1000000 operators, cooperative 10-second budget) return 422 SPECIFICATION_PROCESSING_LIMIT.
+        Two concurrent extraction slots per process; saturation returns 429 IMPORT_BUSY. Retry later without automatic retry of a committed upload.
+        Each successful upload creates a new version; no idempotency key is supported.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: title
+        in: query
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 200}
+        description: Trimmed nonblank title; no control characters.
+      - name: filename
+        in: query
+        required: true
+        schema: {type: string, minLength: 1}
+        description: Original filename; sanitized basename must contain 1–255 Unicode characters and end in .txt or .pdf.
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: {type: string, format: binary}
+          application/pdf:
+            schema: {type: string, format: binary}
+      responses:
+        '201':
+          description: Version committed; no decomposition started
+          headers:
+            Location:
+              schema: {type: string, format: uri-reference}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SpecificationMetadata'}
+        '400': {$ref: '#/components/responses/SpecificationProblem'}
+        '401': {$ref: '#/components/responses/SpecificationAuthenticationRequired'}
+        '404': {$ref: '#/components/responses/SpecificationProblem'}
+        '409': {$ref: '#/components/responses/SpecificationProblem'}
+        '413': {$ref: '#/components/responses/SpecificationProblem'}
+        '415': {$ref: '#/components/responses/SpecificationProblem'}
+        '422': {$ref: '#/components/responses/SpecificationProblem'}
+        '429': {$ref: '#/components/responses/SpecificationProblem'}
+        '500': {$ref: '#/components/responses/SpecificationProblem'}
+    get:
+      tags: [Specifications]
+      operationId: listSpecifications
+      summary: List accessible specification metadata, newest version first
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: page
+        in: query
+        schema: {type: integer, minimum: 0, default: 0}
+      - name: size
+        in: query
+        schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Member-scoped paginated history, including archived projects; no document text
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SpecificationPage'}
+        '400': {$ref: '#/components/responses/SpecificationProblem'}
+        '401': {$ref: '#/components/responses/SpecificationAuthenticationRequired'}
+        '404': {$ref: '#/components/responses/SpecificationProblem'}
+        '500': {$ref: '#/components/responses/SpecificationProblem'}
+  /api/v1/projects/{projectId}/specifications/{specificationId}:
+    parameters:
+    - $ref: '#/components/parameters/SpecificationProjectId'
+    - $ref: '#/components/parameters/SpecificationId'
+    get:
+      tags: [Specifications]
+      operationId: getSpecification
+      summary: Get metadata for a member-accessible version
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Metadata only
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SpecificationMetadata'}
+        '400': {$ref: '#/components/responses/SpecificationProblem'}
+        '401': {$ref: '#/components/responses/SpecificationAuthenticationRequired'}
+        '404': {$ref: '#/components/responses/SpecificationProblem'}
+        '500': {$ref: '#/components/responses/SpecificationProblem'}
+  /api/v1/projects/{projectId}/specifications/{specificationId}/text:
+    parameters:
+    - $ref: '#/components/parameters/SpecificationProjectId'
+    - $ref: '#/components/parameters/SpecificationId'
+    get:
+      tags: [Specifications]
+      operationId: getSpecificationText
+      summary: Get extracted text without interpreting document instructions
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: UTF-8 plain text; no-store and nosniff; never HTML
+          content:
+            text/plain:
+              schema: {type: string, minLength: 1, maxLength: 200000}
+        '400': {$ref: '#/components/responses/SpecificationProblem'}
+        '401': {$ref: '#/components/responses/SpecificationAuthenticationRequired'}
+        '404': {$ref: '#/components/responses/SpecificationProblem'}
+        '500': {$ref: '#/components/responses/SpecificationProblem'}
 components:
+  parameters:
+    SpecificationProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    SpecificationId:
+      name: specificationId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    SpecificationProblem:
+      description: >-
+        Generic Problem Details. Inaccessible project or nested version uses PROJECT_NOT_FOUND (404);
+        malformed parameters use VALIDATION_ERROR (400); unsupported media/extension uses UNSUPPORTED_MEDIA_TYPE (415).
+        Import-specific limits and invalid documents are described on uploadSpecification. Unexpected failures use INTERNAL_ERROR (500).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    SpecificationAuthenticationRequired:
+      description: Missing/invalid bearer token or inactive account (AUTH_REQUIRED)
+      headers:
+        WWW-Authenticate:
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
   securitySchemes:
     bearerAuth:
       type: http
@@ -2190,6 +2340,31 @@ components:
       in: header
       name: X-CSRF-Token
   schemas:
+    SpecificationMetadata:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, uploadedBy, version, title, originalFilename, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        uploadedBy: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        title: {type: string, minLength: 1, maxLength: 200}
+        originalFilename: {type: string, nullable: true, maxLength: 255}
+        status: {type: string, enum: [uploaded, processing, processed, failed]}
+        createdAt: {type: string, format: date-time}
+    SpecificationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/SpecificationMetadata'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        totalElements: {type: integer, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
     Problem:
       type: object
       additionalProperties: false
