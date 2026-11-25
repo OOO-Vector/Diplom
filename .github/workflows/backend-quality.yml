@@ -2,6 +2,8 @@ name: Backend quality
 on:
   pull_request:
     branches: [develop]
+  push:
+    branches: [tests-01, FE, develop, main]
   workflow_dispatch:
 permissions:
   contents: read
