@@ -47,6 +47,7 @@ export default defineConfig(({ command, isPreview, mode }) => {
     preview: { host: "127.0.0.1", proxy },
     test: {
       environment: "jsdom",
+      setupFiles: ["./tests/setup.ts"],
       include: ["{src,tests}/**/*.test.{ts,tsx}"],
       coverage: {
         provider: "v8",
