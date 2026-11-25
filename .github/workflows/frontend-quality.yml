@@ -27,12 +27,27 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run test:coverage
-      - name: Summarize line coverage
+      - name: Summarize frontend line coverage
         if: always()
+        shell: bash
         run: |
-          if [ -f coverage/coverage-summary.json ]; then
-            node -e 'const { lines } = require("./coverage/coverage-summary.json").total; console.log("Frontend line coverage: " + lines.covered + " / " + lines.total + " (" + lines.pct + "%)")' >> "$GITHUB_STEP_SUMMARY"
+          summary='coverage/coverage-summary.json'
+          if [ ! -f "$summary" ]; then
+            {
+              echo '## Frontend line coverage'
+              echo
+              echo 'Coverage summary was not generated (the test/coverage step may have failed before producing it).'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          node --input-type=commonjs -e '
+            const { lines } = require("./coverage/coverage-summary.json").total;
+            console.log("## Frontend line coverage");
+            console.log("");
+            console.log(`**${lines.covered} / ${lines.total} lines covered (${lines.pct}%).**`);
+            console.log("");
+            console.log("Scope: all included `frontend/src/**/*.ts` and `frontend/src/**/*.tsx` files; the Vitest 70% line threshold is enforced by `npm run test:coverage`.");
+          ' >> "$GITHUB_STEP_SUMMARY"
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - name: Upload test evidence
