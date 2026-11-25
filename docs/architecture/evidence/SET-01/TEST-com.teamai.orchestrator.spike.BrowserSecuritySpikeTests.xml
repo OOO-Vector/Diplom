@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.teamai.orchestrator.spike.BrowserSecuritySpikeTests" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-23T07:08:06.863Z" hostname="WIN-KETJU3JFG5K" time="2.524">
+  <properties/>
+  <testcase name="loginLogoutClearCsrfAndRefreshCookieAttributesMatch()" classname="com.teamai.orchestrator.spike.BrowserSecuritySpikeTests" time="0.821"/>
+  <testcase name="bootstrapAndAllFourAuthPostsRequireMatchingCookieAndMaskedHeader()" classname="com.teamai.orchestrator.spike.BrowserSecuritySpikeTests" time="0.026"/>
+  <testcase name="rejectsForeignMissingAndNullOriginEvenWithValidCsrfAndChecksPreflight()" classname="com.teamai.orchestrator.spike.BrowserSecuritySpikeTests" time="0.008"/>
+  <testcase name="actualBearerFilterAcceptsJwtWithoutCsrfButCookiesCannotAuthenticate()" classname="com.teamai.orchestrator.spike.BrowserSecuritySpikeTests" time="0.126"/>
+  <system-out><![CDATA[09:08:09.058 [Test worker] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:08:09.061 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:08:09.063 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 2 ms
+09:08:09.227 [Test worker] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:08:09.228 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:08:09.229 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:08:09.253 [Test worker] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:08:09.253 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:08:09.254 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:08:09.262 [Test worker] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:08:09.262 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:08:09.262 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:08:09.382 [Test worker] WARN org.springframework.web.servlet.PageNotFound -- No mapping for GET /api/v1/auth/me
+09:08:09.384 [Test worker] WARN org.springframework.web.servlet.PageNotFound -- No endpoint GET /api/v1/auth/me.
+]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (C:\Users\user\.gradle\caches\modules-2\files-2.1\net.bytebuddy\byte-buddy-agent\1.17.8\f09415827a71be7ed621c7bd02550678f28bc81c\byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

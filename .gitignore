@@ -7,6 +7,10 @@
 .gradle/
 **/build/
 
+# Generated CORE-01 evidence copies (source tests and documentation stay tracked)
+**/evidence/CORE-01/TEST-*.xml
+**/evidence/CORE-01/source-sha256.txt
+
 # IDE
 .idea/
 .vscode/

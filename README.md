@@ -17,17 +17,18 @@ The project is being developed incrementally. **The PostgreSQL database foundati
 
 | Area | Status |
 | --- | --- |
-| PostgreSQL schema (27 application tables) | Implemented |
-| Liquibase schema migrations (12 changesets) | Implemented |
+| PostgreSQL schema (29 application tables after 013) | Implemented; CORE-01 pending review |
+| Liquibase schema migrations (13 changesets) | 001–012 baseline plus 013 refresh persistence |
 | Database roles, permissions, constraints, and indexes | Implemented |
 | SQL integrity tests, audits, and query benchmarks | Executed and documented |
 | Clean Docker-volume database initialization | Verified |
 | Spring Boot application bootstrap and database connection | Verified |
-| Domain REST API and business services | Not yet implemented in this repository snapshot |
+| Registration, login, JWT, current user, refresh rotation/replay and logout | CORE-02–04 merged |
+| Project CRUD, scoped membership and ownership transfer | CORE-05/06 implemented for external review on the existing schema |
 | GitHub synchronization, AI orchestration, project-memory services | Planned / not yet implemented |
 | Trainable ML component and end-user interface | Planned / not yet implemented |
 
-The current Spring Boot application is an infrastructure starting point, not a completed API or product. Its default Spring Security configuration is for development only.
+The application implements Core authentication, project and membership endpoints with explicit Spring Security configuration. Other domain APIs remain planned.
 
 ## Technology Stack
 
@@ -118,12 +119,15 @@ On the first startup with an empty Docker volume, `database/security/002-init-ro
 
 ### 3. Start the Backend
 
-The backend requires two environment variables in its process environment:
+The backend requires database and authentication configuration in its process environment:
 
 - `DB_PASSWORD`: the same administrative password as `POSTGRES_PASSWORD` in `.env`, used by Liquibase.
 - `DB_APP_PASSWORD`: the application database password from `.env`, used by Spring DataSource.
+- `APP_ALLOWED_ORIGINS`: comma-separated exact HTTPS origins without trailing slashes or paths.
+- `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_KEY_ID`: deployment-specific identifiers; no defaults.
+- `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`: Spring resource locations (`file:/...`) for an externally mounted PKCS#8 private PEM and X.509 public PEM, matching RSA keys of at least 2048 bits. Keep key files outside Git.
 
-**Important:** Spring Boot does not automatically load the root `.env` file in this setup. Set both variables in the terminal or your IDE run configuration before starting the backend.
+**Important:** Spring Boot does not automatically load the root `.env` file in this setup. Set all variables in the terminal or your IDE run configuration before starting the backend. The commands below show the database portion; authentication configuration above is also required. Use a same-origin HTTPS proxy for browser cookies.
 
 **Windows CMD** (from `backend/`):
 
@@ -153,7 +157,7 @@ Run from any directory with access to Docker:
 docker exec team-ai-postgres psql -U team_ai_admin -d team_ai_db -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('databasechangelog', 'databasechangeloglock');"
 ```
 
-The expected result after Liquibase has run is **27** application tables.
+The expected result after Liquibase has run through 013 is **29** application tables (27 in the historical 001–012 baseline).
 
 To inspect the migration history:
 
@@ -161,7 +165,7 @@ To inspect the migration history:
 docker exec team-ai-postgres psql -U team_ai_admin -d team_ai_db -c "SELECT id, exectype FROM databasechangelog ORDER BY orderexecuted;"
 ```
 
-The expected history currently contains **12** executed changesets (`001`–`012`).
+The expected current history contains **13** executed changesets (`001`–`013`).
 
 > **Data safety:** Do not use `docker compose down -v` on the development stack unless you intentionally want to delete its persisted PostgreSQL data.
 
@@ -171,14 +175,14 @@ The current schema is organized into seven logical modules:
 
 | Module | Tables |
 | --- | ---: |
-| Core & Access | 3 |
+| Core & Access | 5 |
 | Planning | 4 |
 | Shared Project Memory | 5 |
 | GitHub Integration | 2 |
 | AI & Chat | 4 |
 | Conflict Detection & ML | 6 |
 | Analytics & Events | 3 |
-| **Total** | **27** |
+| **Total** | **29** |
 
 Database safeguards include foreign keys, unique and check constraints, project-ownership enforcement, cycle prevention for task dependencies, explicit application privileges, and indexes for frequently accessed queries.
 
@@ -189,12 +193,69 @@ For detailed design and evidence, see:
 - [Full ER diagram (PNG)](database/docs/erd/full-schema.png) and [DBML source](database/docs/erd/full-schema.dbml)
 - [Modular ER diagrams](database/docs/erd/modules/)
 - [Database test report](database/docs/Database_Test_Report.md)
+- [CORE-01 refresh schema, locking and verification](database/docs/CORE-01_Refresh_Sessions.md)
 
 ## Testing and Reproducibility
+
+From `backend/`, with JDK 21, Docker and Node.js 24 (for the pinned contract validator), run:
+
+```powershell
+.\gradlew.bat clean test securitySpike schemaTest openApiValidate jacocoTestReport jacocoTestCoverageVerification bootJar --rerun-tasks --console=plain
+```
+
+On Linux use `./gradlew` with the same arguments. `./gradlew check bootJar` also runs all quality gates.
+`test` uses disposable PostgreSQL 16/pgvector through Testcontainers and the real migrations, with separate app/admin roles;
+it generates temporary RSA keys and credentials, independent of the local `.env` and development database.
+`securitySpike` is the isolated SET-01 library suite; `schemaTest` verifies clean install, 001–012 upgrade and 013 constraints/grants.
+Docker must be running. Reports remain local under `backend/build/reports/tests/` and are ignored by Git.
+The `schemaTest` suite also runs all 78 SQL integrity checks from `database/tests/` against a separate, freshly migrated
+PostgreSQL container. Each script must exit successfully and emit its expected number of PASS notices.
+Run only this suite from `backend/` with `./gradlew schemaTest --tests '*SqlIntegrityTests'`
+(use `gradlew.bat` on Windows). Raw per-script logs are written to `backend/build/reports/sql-integrity/`
+and uploaded by CI. The concurrent project and refresh-session scenarios run in `test`, and the refresh family
+row-lock scenario runs in `schemaTest`. The manual ownership and outbox scenarios in the Database report are
+separate from the 78 checks. SQL script 009 only prepares fixtures for manual concurrency checks.
+
+Tests run sequentially in one worker; race tests create their own concurrent requests and synchronize through PostgreSQL
+lock observations, not arbitrary sleeps. Committed Core fixtures are deleted after each integration test using only the
+disposable container's admin connection, in a transaction with deferred constraints. No production grants are expanded.
+Testcontainers/Ryuk removes disposable containers; temporary signing-key files are removed when the test JVM exits.
+Run from `backend/` so `../database/security/002-init-roles.sh` resolves correctly. Git attributes enforce LF for shell scripts.
+
+**Coverage:** JaCoCo 0.8.14 generates `backend/build/reports/jacoco/test/html/index.html` and `jacocoTestReport.xml`.
+The report includes all main classes. The mandatory 70% LINE/COVEREDRATIO gate aggregates every compiled class under
+`com/teamai/orchestrator/core/**`: services, domain, controllers, persistence and DTOs, without exclusions inside Core.
+Bootstrap and `infrastructure/**` remain visible in the full report but do not enter the Core threshold. Only `test`
+execution data enters this gate; spike and schema tests do not inflate production coverage. Calculate Core percentage
+by summing the package-level LINE covered/missed counters for `com/teamai/orchestrator/core/*`, not the report root
+(which also includes infrastructure), then `covered / (covered + missed) * 100`.
+
+**Contracts:** `openApiValidate` executes Redocly CLI **2.82.0**, `spec` ruleset, against `docs/api/openapi.yaml`.
+It fails the build on YAML/duplicate-key, reference and OpenAPI structural/schema errors; output is stored under
+`backend/build/reports/contracts/openapi.txt`, including failed validation. npm downloads the pinned tool on first use.
+Separately, `CoreContractTests` uses test-only Atlassian validator **2.46.1** against actual MockMvc responses with the
+real security chain, services and PostgreSQL. It checks representative responses across all Core routes, schemas,
+media types and status codes, including negative assertions against malformed responses. It is not exhaustive runtime
+parity for every documented error nor a deployed-network/proxy test. CORS preflight is tested separately from API operations.
+Run only these tests with `gradlew.bat test --tests '*CoreContractTests'`; rerun the complete suite before reporting coverage.
+
+**CI:** `.github/workflows/backend-quality.yml` runs on PRs targeting `develop` and manual `workflow_dispatch`, using
+Ubuntu 24.04, Java 21, Node 24, the committed Gradle wrapper and Gradle dependency caching. It requires no repository
+secrets, uses read-only contents permission and uploads JUnit, HTML, coverage and contract reports even on failure.
+Any unsuccessful Gradle task fails the job; artifact upload does not mask failure. To verify failure detection locally,
+temporarily duplicate the root `openapi` key, run `openApiValidate`, confirm a nonzero exit, and restore the exact original
+file before running the successful gate. Never commit the broken specification. A remote green run requires actual
+GitHub execution; local success is not remote CI evidence. A new workflow may need to reach the default branch before
+GitHub exposes manual dispatch; do not create a PR or merge solely to claim a green run.
 
 Database development has included **78 SQL integrity checks**, schema and role audits, concurrency scenarios, and performance experiments. These tests are stored separately from the Java test suite in `database/tests/`.
 
 A clean PostgreSQL instance, initialized on a separate Docker volume, was used to verify automatic role setup, execution of all 12 migrations, creation of 27 tables, pgvector availability, application permissions, and successful Spring Boot startup.
+
+That historical result covers 001–012. For migration 013, run `gradlew.bat schemaTest` from `backend/`
+(JDK 21 and Docker required). It applies real Liquibase migrations on isolated PostgreSQL 16/pgvector Testcontainers,
+checks clean installation and a populated 001–012 upgrade, constraints, grants and family locking.
+It never starts the Spring application or connects to the configured development database. DB-014 tracks acceptance evidence separately.
 
 For an **isolated** database-initialization check, the repository includes `compose.repro.yaml`, which binds PostgreSQL to port **5434** and uses a separate Docker volume. It is not the normal development environment. The database test report documents the recorded verification evidence and limitations.
 

@@ -1,5 +1,6 @@
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.0.9'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -21,6 +22,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-liquibase'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+	implementation 'org.bouncycastle:bcprov-jdk18on:1.87'
+	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	testImplementation 'com.atlassian.oai:swagger-request-validator-core:2.46.1'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -35,4 +40,89 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	maxParallelForks = 1
+	systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'
+	finalizedBy 'jacocoTestReport'
+}
+
+jacoco { toolVersion = '0.8.14' }
+tasks.named('jacocoTestReport') {
+	dependsOn test
+	reports { xml.required = true; html.required = true }
+}
+tasks.named('jacocoTestCoverageVerification') {
+	dependsOn test
+	// All Core production classes, including DTOs; no business-class exclusions.
+	classDirectories.setFrom(sourceSets.main.output.classesDirs.asFileTree.matching {
+		include 'com/teamai/orchestrator/core/**'
+	})
+	violationRules { rule { limit { counter = 'LINE'; value = 'COVEREDRATIO'; minimum = 0.70 } } }
+}
+
+tasks.register('openApiValidate', Exec) {
+	group = 'verification'
+	description = 'Validates the OpenAPI structure and references with pinned Redocly CLI (Node 22.12+ required).'
+	def report = layout.buildDirectory.file('reports/contracts/openapi.txt')
+	// Close/persist the report even on validation failure, then explicitly fail the build.
+	ignoreExitValue = true
+	doFirst {
+		report.get().asFile.parentFile.mkdirs()
+		standardOutput = new FileOutputStream(report.get().asFile)
+		errorOutput = standardOutput
+	}
+	def args = ['npx', '--yes', '@redocly/cli@2.82.0', 'lint', '../docs/api/openapi.yaml', '--extends=spec', '--format=stylish']
+	commandLine(System.getProperty('os.name').toLowerCase().contains('windows') ? ['cmd', '/c'] + args : args)
+	doLast {
+		standardOutput.close()
+		if (executionResult.get().exitValue != 0) {
+			throw new GradleException("OpenAPI validation failed; see ${report.get().asFile}")
+		}
+	}
+}
+tasks.named('check') { dependsOn 'securitySpike', 'schemaTest', 'openApiValidate', 'jacocoTestCoverageVerification' }
+
+// SET-01: isolated library/protocol experiment; never included in the application jar.
+sourceSets {
+	securitySpike
+}
+
+dependencies {
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	securitySpikeImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	securitySpikeImplementation 'org.bouncycastle:bcprov-jdk18on:1.87'
+	securitySpikeRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('securitySpike', Test) {
+	description = 'Runs SET-01 security experiments without application startup or database access.'
+	group = 'verification'
+	testClassesDirs = sourceSets.securitySpike.output.classesDirs
+	classpath = sourceSets.securitySpike.runtimeClasspath
+	useJUnitPlatform()
+}
+
+// Real migration tests in disposable PostgreSQL containers, without Spring app startup.
+sourceSets {
+	schemaTest {
+		resources.srcDir 'src/main/resources'
+	}
+}
+
+dependencies {
+	schemaTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+	schemaTestImplementation 'org.liquibase:liquibase-core'
+	schemaTestImplementation 'org.postgresql:postgresql'
+	schemaTestImplementation 'org.testcontainers:testcontainers-postgresql'
+	schemaTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('schemaTest', Test) {
+	description = 'Verifies Liquibase clean install, upgrade, refresh constraints and grants on PostgreSQL 16/pgvector.'
+	group = 'verification'
+	testClassesDirs = sourceSets.schemaTest.output.classesDirs
+	classpath = sourceSets.schemaTest.runtimeClasspath
+	useJUnitPlatform()
+	maxParallelForks = 1
 }
