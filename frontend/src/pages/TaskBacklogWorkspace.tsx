@@ -57,7 +57,7 @@ export function TaskBacklogWorkspace({
     items.every(({ githubSync }) => githubSync === "synced");
   const children = new Map<string | null, BacklogItem[]>();
   const numbers = new Map<string, string>();
-  const counts = { epic: 0, task: 0, subtask: 0 };
+  const counts = { epic: 0, story: 0, task: 0, subtask: 0 };
   for (const item of items) {
     counts[item.kind]++;
     const parentId =
@@ -197,8 +197,9 @@ export function TaskBacklogWorkspace({
         <>
           <div className="project-tasks__metadata">
             <span>
-              Created {counts.epic} epics, {counts.task} tasks, {counts.subtask}{" "}
-              subtasks
+              Created {counts.epic} epics,{" "}
+              {counts.story > 0 && `${counts.story} stories, `}
+              {counts.task} tasks, {counts.subtask} subtasks
             </span>
             <span
               className={hasGraphErrors ? "project-tasks__cycle" : undefined}
@@ -215,7 +216,7 @@ export function TaskBacklogWorkspace({
             </span>
             {backlog.generationMs !== null && (
               <span>
-                Generated in {(backlog.generationMs / 1000).toFixed(3)} s
+                Local draft in {(backlog.generationMs / 1000).toFixed(3)} s
               </span>
             )}
           </div>

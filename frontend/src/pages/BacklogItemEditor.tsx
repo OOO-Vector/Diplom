@@ -4,7 +4,7 @@ import {
   createItem,
   kindLabels,
   nextTaskStatuses,
-  parentKind,
+  parentKinds,
   taskDraftSchema,
   taskStatuses,
   type BacklogItem,
@@ -31,7 +31,9 @@ export function ItemEditor({
   const [draft, setDraft] = useState(() => item ?? createItem("epic", null));
   const [failure, setFailure] = useState("");
   const [confirmRemoval, setConfirmRemoval] = useState(false);
-  const parents = items.filter(({ kind }) => kind === parentKind[draft.kind]);
+  const parents = items.filter(({ kind }) =>
+    parentKinds[draft.kind].includes(kind),
+  );
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,19 +113,22 @@ export function ItemEditor({
                 setDraft({ ...draft, kind, parentId: null });
               }}
             >
-              <option value="epic">Epic</option>
-              <option
-                value="task"
-                disabled={!items.some(({ kind }) => kind === "epic")}
-              >
-                Task
-              </option>
-              <option
-                value="subtask"
-                disabled={!items.some(({ kind }) => kind === "task")}
-              >
-                Subtask
-              </option>
+              {(Object.keys(kindLabels) as BacklogItem["kind"][]).map(
+                (kind) => (
+                  <option
+                    key={kind}
+                    value={kind}
+                    disabled={
+                      kind !== "epic" &&
+                      !items.some((item) =>
+                        parentKinds[kind].includes(item.kind),
+                      )
+                    }
+                  >
+                    {kindLabels[kind]}
+                  </option>
+                ),
+              )}
             </select>
           </label>
         )}

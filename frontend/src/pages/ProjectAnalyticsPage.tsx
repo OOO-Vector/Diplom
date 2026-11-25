@@ -40,7 +40,7 @@ export default function ProjectAnalyticsPage() {
       className="project-analytics"
       aria-labelledby="project-analytics-title"
     >
-      <h1 id="project-analytics-title">AI operation analytics</h1>
+      <h1 id="project-analytics-title">Local demo analytics</h1>
       <div
         className="project-analytics__scroll"
         role="region"
@@ -85,6 +85,11 @@ export default function ProjectAnalyticsPage() {
               <span>
                 Epics <strong>{last?.counts.epic ?? "N/A"}</strong>
               </span>
+              {last && last.counts.story > 0 && (
+                <span>
+                  Stories <strong>{last.counts.story}</strong>
+                </span>
+              )}
               <span>
                 Tasks <strong>{last?.counts.task ?? "N/A"}</strong>
               </span>

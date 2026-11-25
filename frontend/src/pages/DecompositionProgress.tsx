@@ -64,10 +64,10 @@ export function DecompositionProgress({
             specification...
           </>
         ) : previewTime < validationPreviewMs ? (
-          "Decomposing requirements..."
+          "Building a local task draft..."
         ) : (
           <>
-            Validating JSON schema and
+            Checking the local draft and
             <br />
             dependency graph...
           </>

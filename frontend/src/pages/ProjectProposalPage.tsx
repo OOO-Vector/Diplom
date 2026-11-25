@@ -213,7 +213,7 @@ function ProposalForm() {
             />
           </span>
         </label>
-        <h2>Conflict check summary:</h2>
+        <h2>Local conflict check summary:</h2>
         {checking ? (
           <div
             className="project-proposal__loading"

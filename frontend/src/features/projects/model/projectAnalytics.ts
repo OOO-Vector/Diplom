@@ -9,6 +9,7 @@ const metricsSchema = z.object({
       durationMs: z.number().nonnegative(),
       counts: z.object({
         epic: z.number(),
+        story: z.number().default(0),
         task: z.number(),
         subtask: z.number(),
       }),
@@ -59,7 +60,7 @@ export function recordDecomposition(
   hasCycle: boolean,
 ) {
   updateMetrics(projectId, (metrics) => {
-    const counts = { epic: 0, task: 0, subtask: 0 };
+    const counts = { epic: 0, story: 0, task: 0, subtask: 0 };
     for (const { kind } of items) counts[kind]++;
     metrics.proposals.push({
       items: items.map(({ id }) => id),

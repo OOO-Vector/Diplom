@@ -2,10 +2,9 @@
 export const maxSpecificationBytes = 10 * 1024 * 1024;
 export const maxSpecificationCharacters = 200_000;
 
-export async function validateTaskDocument(
+export function checkTaskDocumentFile(
   file: File,
-): Promise<{ text: string } | { error: string; reason?: "format" | "size" }> {
-  const extension = file.name.split(".").pop()?.toLowerCase();
+): { error: string; reason?: "format" | "size" } | undefined {
   if (!/\.(txt|pdf)$/i.test(file.name))
     return {
       reason: "format",
@@ -15,6 +14,14 @@ export async function validateTaskDocument(
   if (file.size > maxSpecificationBytes)
     return { reason: "size", error: "The file exceeds the 10 MiB limit." };
   if (!file.size) return { error: "The file is empty." };
+}
+
+export async function validateTaskDocument(
+  file: File,
+): Promise<{ text: string } | { error: string; reason?: "format" | "size" }> {
+  const invalid = checkTaskDocumentFile(file);
+  if (invalid) return invalid;
+  const extension = file.name.split(".").pop()?.toLowerCase();
 
   try {
     const buffer = await readBytes(file);

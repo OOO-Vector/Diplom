@@ -11,7 +11,7 @@ export const taskStatuses = [
 
 const itemSchema = z.object({
   id: z.string(),
-  kind: z.enum(["epic", "task", "subtask"]),
+  kind: z.enum(["epic", "story", "task", "subtask"]),
   parentId: z.string().nullable(),
   title: z.string(),
   description: z.string(),
@@ -48,12 +48,21 @@ export const emptyBacklog: Backlog = {
   generationMs: null,
   confirmed: false,
 };
-export const kindLabels = { epic: "Epic", task: "Task", subtask: "Subtask" };
-export const parentKind = {
-  epic: null,
-  task: "epic",
-  subtask: "task",
+export const kindLabels = {
+  epic: "Epic",
+  story: "Story",
+  task: "Task",
+  subtask: "Subtask",
 } as const;
+export const parentKinds: Record<
+  BacklogItem["kind"],
+  readonly BacklogItem["kind"][]
+> = {
+  epic: [],
+  story: ["epic"],
+  task: ["epic", "story"],
+  subtask: ["task"],
+};
 
 export function readBacklog(key: string): Backlog {
   try {
@@ -196,9 +205,13 @@ export function graphProblems(items: readonly BacklogItem[]) {
   const cycles = cyclicItems(items);
   const invalid = new Map<string, string>();
   for (const item of items) {
-    const expected = parentKind[item.kind];
+    const expected = parentKinds[item.kind];
     const parent = item.parentId === null ? null : byId.get(item.parentId);
-    if (expected === null ? item.parentId !== null : parent?.kind !== expected)
+    if (
+      expected.length
+        ? !parent || !expected.includes(parent.kind)
+        : item.parentId !== null
+    )
       invalid.set(item.id, "Invalid parent");
     if (!invalid.has(item.id) && item.blockedBy.some((id) => !byId.has(id)))
       invalid.set(item.id, "Unknown blocking task");

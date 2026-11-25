@@ -17,6 +17,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --reporter=default --reporter=junit --outputFile=test-results/vitest.xml",
+    "test:e2e": "playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -31,11 +33,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
+    "@playwright/test": "1.65.1",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "2.1.9",
     "eslint": "^9.20.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-import": "^2.31.0",

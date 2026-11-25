@@ -203,7 +203,7 @@ export default function ProjectDecisionsPage() {
                     <dd>{rationale}</dd>
                     <dt>Decision:</dt>
                     <dd>{decision}</dd>
-                    <dt>Conflict check summary:</dt>
+                    <dt>Local conflict check summary:</dt>
                     <dd>
                       {report?.summary ?? "—"}
                       {report?.sources.map(({ title, excerpt }) => (

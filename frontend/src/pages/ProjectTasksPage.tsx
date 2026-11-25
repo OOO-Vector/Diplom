@@ -10,7 +10,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isLocalDemo, useAccount } from "../features/account/useAccount";
 import { workspaceKey } from "../features/account/accountWorkspace";
 import { useWorkspace } from "../features/projects/model/workspaceContext";
-import { validateTaskDocument } from "../features/projects/model/validateTaskDocument";
+import { specificationsApi } from "../features/projects/api/specificationsApi";
+import {
+  checkTaskDocumentFile,
+  validateTaskDocument,
+} from "../features/projects/model/validateTaskDocument";
+import { normalizeApiError } from "../shared/api/requestApi";
 import {
   listSpecifications,
   projectDocumentsKey,
@@ -38,6 +43,35 @@ import "./ProjectTasksPage.css";
 
 type TasksAction = "create" | "decompose";
 
+function specificationUploadError(error: unknown) {
+  const problem = normalizeApiError(error);
+  switch (problem.code) {
+    case "INVALID_SPECIFICATION":
+      return {
+        error:
+          "Could not read the document. Use UTF-8 TXT or a PDF with a text layer.",
+      };
+    case "UNSUPPORTED_MEDIA_TYPE":
+      return { error: problem.message, reason: "format" as const };
+    case "PAYLOAD_TOO_LARGE":
+      return { error: problem.message, reason: "size" as const };
+    case "SPECIFICATION_TEXT_TOO_LARGE":
+      return {
+        error: "The extracted text exceeds the 200,000-character limit.",
+      };
+    case "SPECIFICATION_PROCESSING_LIMIT":
+      return {
+        error: "The PDF is too complex to process. Try a shorter document.",
+      };
+    case "PROJECT_ARCHIVED":
+      return { error: "Archived projects cannot accept new specifications." };
+    case "IMPORT_BUSY":
+      return { error: "Document import is busy. Wait a moment and try again." };
+    default:
+      return { error: problem.message };
+  }
+}
+
 export default function ProjectTasksPage({ action }: { action?: TasksAction }) {
   const { archived } = useWorkspace();
   const { projectId = "" } = useParams();
@@ -63,7 +97,8 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
   const projectPath = `/projects/${encodeURIComponent(projectId)}`;
   const storageKey = workspaceKey(`team-ai.backlog:${projectId}`);
   const documentsKey = projectDocumentsKey(projectId);
-  const specificationsKey = [...documentsKey, "specifications"];
+  const demo = isLocalDemo();
+  const specificationsKey = [...documentsKey, "specifications", demo];
   const [backlog, setBacklog] = useState(() => readBacklog(storageKey));
   const [openCreate, setOpenCreate] = useState(
     action === "create" && !publicationLocked(backlog),
@@ -71,7 +106,6 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
   const [storageError, setStorageError] = useState("");
   const [operationError, setOperationError] = useState("");
 
-  const demo = isLocalDemo();
   const simulateFailure =
     demo && new URLSearchParams(search).get("decompositionDemo") === "error";
   const specificationId =
@@ -84,17 +118,22 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
   }>({ pending: false });
   const specifications = useQuery({
     queryKey: specificationsKey,
-    queryFn: ({ signal }) => listSpecifications(projectId, signal),
+    queryFn: ({ signal }) =>
+      demo
+        ? listSpecifications(projectId, signal)
+        : specificationsApi.latest(projectId, signal),
     enabled: action !== "decompose",
   });
   const selected =
     specifications.data?.find(({ id }) => id === selectedId) ??
     specifications.data?.[0];
   const source = useQuery({
-    queryKey: [...documentsKey, "decomposition-source", specificationId],
+    queryKey: [...documentsKey, "decomposition-source", demo, specificationId],
     enabled: Boolean(specificationId) && action === "decompose",
     gcTime: 0,
     queryFn: async ({ signal }) => {
+      if (!demo)
+        return specificationsApi.source(projectId, specificationId, signal);
       const file = await readSpecificationFile(
         projectId,
         specificationId,
@@ -115,9 +154,11 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
     const controller = new AbortController();
     upload.current = controller;
     setValidation({ pending: true });
-    const result = await validateTaskDocument(file);
+    const result = demo
+      ? await validateTaskDocument(file)
+      : checkTaskDocumentFile(file);
     if (controller.signal.aborted) return;
-    if ("error" in result) {
+    if (result && "error" in result) {
       setValidation({
         pending: false,
         error: result.error,
@@ -126,12 +167,14 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
       return;
     }
     try {
-      const specification = await saveSpecification(
-        projectId,
-        file,
-        account?.name ?? "You",
-        controller.signal,
-      );
+      const specification = demo
+        ? await saveSpecification(
+            projectId,
+            file,
+            account?.name ?? "You",
+            controller.signal,
+          )
+        : await specificationsApi.upload(projectId, file, controller.signal);
       if (controller.signal.aborted) return;
       queryClient.setQueryData<typeof specifications.data>(
         specificationsKey,
@@ -143,11 +186,13 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
       setSelectedId(specification.id);
       void queryClient.invalidateQueries({ queryKey: documentsKey });
       setValidation({ pending: false });
-    } catch {
+    } catch (error) {
       if (!controller.signal.aborted)
         setValidation({
           pending: false,
-          error: "Could not save the specification. Try again.",
+          ...(demo
+            ? { error: "Could not save the specification. Try again." }
+            : specificationUploadError(error)),
         });
     }
   }
@@ -298,6 +343,9 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
       {!processing && !validation.error && storageError && (
         <p>{storageError}</p>
       )}
+      {!processing && !demo && !validation.error && specifications.isError && (
+        <p role="alert">Could not load the project specification.</p>
+      )}
       {validation.pending && <p role="status">Checking document…</p>}
       {validation.error && (
         <div className="project-tasks__empty" role="alert">
@@ -330,7 +378,7 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
             <p>
               {operationError === "generation" ? (
                 <>
-                  AI generation failed.
+                  Local draft generation failed.
                   <br />
                   No partial draft was saved.
                   <br />
@@ -369,7 +417,7 @@ function ProjectTasks({ action }: { action?: TasksAction }) {
                   <br />
                   Upload your project document and
                   <br />
-                  decompose it to create tasks.
+                  decompose it to create a local draft.
                 </>
               )}
             </p>

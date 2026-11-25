@@ -474,7 +474,9 @@ export default function ProjectChatPage() {
               }}
             >
               {chat.messages.length === 0 ? (
-                <p className="project-chat__empty">How can I help you?</p>
+                <p className="project-chat__empty">
+                  Demo chat. Replies are generated locally.
+                </p>
               ) : (
                 <ol>
                   {chat.messages.map(({ text, documents, reply }, index) => {

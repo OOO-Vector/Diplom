@@ -313,9 +313,11 @@ it("keeps project context on deep links and highlights the active section", asyn
   });
   expect(screen.getByText(/Extracting text layer/)).toBeTruthy();
   await act(async () => vi.advanceTimersByTimeAsync(1200));
-  expect(await screen.findByText("Decomposing requirements...")).toBeTruthy();
+  expect(
+    await screen.findByText("Building a local task draft..."),
+  ).toBeTruthy();
   await act(async () => vi.advanceTimersByTimeAsync(11800));
-  expect(screen.getByText(/Validating JSON schema/)).toBeTruthy();
+  expect(screen.getByText(/Checking the local draft/)).toBeTruthy();
   expect(screen.getByRole("timer").textContent).toBe("13.0 s");
   await act(async () => vi.advanceTimersByTimeAsync(1500));
   vi.useRealTimers();
@@ -434,7 +436,7 @@ it("shows the next mutual dependency after the first pair is fixed", async () =>
   expect(screen.getByRole("alert").textContent).toBe(
     "DAG error: Task #1.3 and #1.4 block each other",
   );
-  expect(screen.getByText("Generated in 1.000 s")).toBeTruthy();
+  expect(screen.getByText("Local draft in 1.000 s")).toBeTruthy();
 });
 
 it("keeps published structure read-only while allowing status changes", async () => {
@@ -493,7 +495,9 @@ it("keeps published structure read-only while allowing status changes", async ()
 it("sends a multiline message and an attachment in the selected chat", async () => {
   await router.navigate("/projects/example/chat");
   render(<App />);
-  expect(await screen.findByText("How can I help you?")).toBeTruthy();
+  expect(
+    await screen.findByText("Demo chat. Replies are generated locally."),
+  ).toBeTruthy();
   const picker = screen.getByLabelText("Chat documents");
   const openPicker = vi.spyOn(picker, "click");
   fireEvent.click(screen.getByRole("button", { name: "Attach documents" }));
@@ -569,7 +573,9 @@ it("sends a multiline message and an attachment in the selected chat", async () 
   );
   expect(dialogueSearch).toHaveProperty("value", "");
   expect(document.activeElement).toBe(dialogueSearch);
-  expect(screen.getByText("How can I help you?")).toBeTruthy();
+  expect(
+    screen.getByText("Demo chat. Replies are generated locally."),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "New chat 1" }));
   expect(screen.getByRole("log").textContent).toContain("project.txt");
 });
@@ -664,7 +670,7 @@ it("renders recorded proposal outcomes and project timings in Analytics", async 
   await router.navigate(`/projects/${project}/analytics`);
   render(<App />);
   expect(
-    await screen.findByRole("heading", { name: "AI operation analytics" }),
+    await screen.findByRole("heading", { name: "Local demo analytics" }),
   ).toBeTruthy();
   expect(screen.getByRole("row", { name: "#001 #002 #003" })).toBeTruthy();
   expect(screen.getByText("6.00")).toBeTruthy();

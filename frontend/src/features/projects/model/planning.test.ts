@@ -71,6 +71,35 @@ it("identifies cycles and invalid parents, and preserves a newer revision throug
   localStorage.removeItem(key);
 });
 
+it("accepts optional stories and preserves existing task and subtask types on reload", () => {
+  const epic = createItem("epic", null, "Epic");
+  const story = createItem("story", epic.id, "Story");
+  const directTask = createItem("task", epic.id, "Task under epic");
+  const storyTask = createItem("task", story.id, "Task under story");
+  const subtask = createItem("subtask", storyTask.id, "Subtask");
+  const items = [epic, story, directTask, storyTask, subtask];
+  expect(graphProblems(items).invalid.size).toBe(0);
+
+  const invalid = graphProblems([
+    epic,
+    { ...story, parentId: directTask.id },
+    directTask,
+    { ...storyTask, parentId: null },
+    { ...subtask, parentId: story.id },
+  ]).invalid;
+  expect([...invalid.keys()]).toEqual([story.id, storyTask.id, subtask.id]);
+
+  const key = "task-story-validation-test";
+  try {
+    expect(
+      writeBacklog(key, emptyBacklog, { ...emptyBacklog, items }),
+    ).not.toBeNull();
+    expect(readBacklog(key).items).toEqual(items);
+  } finally {
+    localStorage.removeItem(key);
+  }
+});
+
 it("stores distinct numbered uploads with author and isolates each project", async () => {
   vi.stubGlobal("indexedDB", new IDBFactory());
   try {

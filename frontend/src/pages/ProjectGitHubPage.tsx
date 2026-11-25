@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { verifyGitHubRepository } from "../features/projects/api/githubRepository";
+import { isLocalDemo } from "../features/account/useAccount";
 import "./ProjectGitHubPage.css";
 
 type Quota = { limit: number; remaining: number; resetAt: number };
@@ -38,8 +39,10 @@ export default function ProjectGitHubPage() {
 
 function GitHubSettings() {
   const { archived } = useWorkspace();
+  const localDemo = isLocalDemo();
+  const readOnly = archived || !localDemo;
   const [searchParams] = useSearchParams();
-  const demo = searchParams.get("quotaDemo") === "1";
+  const demo = localDemo && searchParams.get("quotaDemo") === "1";
   const [demoStartedAt] = useState(Date.now);
   const [now, setNow] = useState(Date.now);
   const [liveQuota, setLiveQuota] = useState<Quota | null>(null);
@@ -101,7 +104,7 @@ function GitHubSettings() {
 
   async function synchronise(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (archived) return;
+    if (readOnly) return;
     if (request.current) return;
     const url = URL.canParse(repository.trim())
       ? new URL(repository.trim())
@@ -183,7 +186,7 @@ function GitHubSettings() {
   }
 
   function disconnect() {
-    if (archived) return;
+    if (readOnly) return;
     resetPreview();
     setRepository("");
     setToken("");
@@ -233,16 +236,21 @@ function GitHubSettings() {
         )}
       </div>
 
+      <p role="status">
+        {localDemo
+          ? "Demo: verifies repository access only."
+          : "GitHub App connection is not available yet."}
+      </p>
       <div className="project-github__field">
         <label htmlFor="github-repository">Project repository URL</label>
         <input
           id="github-repository"
           type="url"
-          placeholder="Format: repo full HTTPS URL. Issues will be published here."
+          placeholder="Full HTTPS URL of the repository."
           autoComplete="off"
           spellCheck={false}
           value={repository}
-          disabled={archived || isPending}
+          disabled={readOnly || isPending}
           onChange={(event) => {
             setRepository(event.target.value);
             resetPreview();
@@ -257,7 +265,7 @@ function GitHubSettings() {
             aria-label={
               tokenVisible ? "Hide access token" : "Show access token"
             }
-            disabled={archived || isPending}
+            disabled={readOnly || isPending}
             onClick={() => setTokenVisible((visible) => !visible)}
           >
             <svg viewBox="0 0 40 24" aria-hidden="true">
@@ -278,12 +286,11 @@ function GitHubSettings() {
           id="github-token"
           type={tokenVisible ? "text" : "password"}
           placeholder={
-            authError ||
-            "Required scopes: repo (for creating Issues) and admin:repo_hook (for status sync)."
+            authError || "Token with read access to this repository."
           }
           aria-invalid={Boolean(authError)}
           aria-describedby={authError ? "github-token-error" : undefined}
-          disabled={archived || isPending}
+          disabled={readOnly || isPending}
           autoComplete="off"
           spellCheck={false}
           value={token}
@@ -320,11 +327,7 @@ function GitHubSettings() {
         </div>
         <div>
           <dt>Webhook endpoint URL</dt>
-          <dd>
-            {previewAt
-              ? "Unavailable in local preview."
-              : "Connect a repository to generate webhook configuration."}
-          </dd>
+          <dd>Unavailable until GitHub App is connected.</dd>
         </div>
         <div>
           <dt>API quota remaining</dt>
@@ -334,13 +337,13 @@ function GitHubSettings() {
       {message && <p role={error ? "alert" : "status"}>{message}</p>}
 
       <div className="project-github__actions">
-        <button type="submit" disabled={archived || isPending}>
+        <button type="submit" disabled={readOnly || isPending}>
           Synchronise
         </button>
         <button
           type="button"
           onClick={disconnect}
-          disabled={archived || isPending}
+          disabled={readOnly || isPending}
         >
           Disconnect
         </button>
