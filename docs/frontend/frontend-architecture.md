@@ -1,5 +1,131 @@
 # Team AI Orchestrator - Frontend Architecture Specification
 
+## FE-01 Current architecture
+
+Team AI Orchestrator is a React 18 SPA built with strict TypeScript and Vite. The component-based layout separates application composition, route views, layout widgets, feature logic and reusable infrastructure. The frontend can run on its own alongside the browser-backed prototype data. Startup and verification commands are documented in the [frontend guide](../../frontend/README.md).
+
+```mermaid
+flowchart TD
+    Main["main.tsx · React bootstrap"] --> App["App · ErrorBoundary and QueryClientProvider"]
+    App --> Router["React Router"]
+    Router --> Public["/login · /register · /reset-password"]
+    Router --> Shell["AppShell · session and membership guards"]
+    Shell --> Layout["Header · Sidebar · workspace"]
+    Layout --> Pages["Global pages and lazy project routes"]
+    Pages --> Features["Account · Notifications · Projects"]
+    Pages --> Shared["UI primitives · CSS tokens · loading and errors"]
+    Public --> Features
+    Features --> Local["Browser storage · prototype Inbox, backlog and analytics"]
+    Features --> Documents["IndexedDB · project documents"]
+    Pages --> Query["TanStack Query · project documents and GitHub check"]
+    Query --> Features
+    Features --> GitHub["GitHub repository verification"]
+    Shell --> HTTP["Axios /api/v1 · typed transport and safe diagnostics"]
+```
+
+| Layer | Current responsibility |
+| --- | --- |
+| `src/app` | Router, global providers, render boundary and route errors |
+| `src/pages` | Screens and their UI workflows |
+| `src/widgets/layout` | Workspace shell, header, project and chat sidebars |
+| `src/features/account` and `src/features/notifications` | Server session, opt-in demo account state and unread Inbox state |
+| `src/features/projects/model` | Project documents, backlog, decisions, analytics and runtime schemas |
+| `src/features/projects/api` | GitHub repository verification |
+| `src/shared/{ui,styles,api,lib}` | UI primitives, CSS variables, request tracking and structured diagnostics |
+| `tests/` and colocated `*.test.ts` | Route integration tests and feature unit tests |
+
+Local interaction state uses React state. Account and unread state use shared stores with `useSyncExternalStore`. TanStack Query handles document reads and GitHub verification, including pending state. The router holds project context. A separate UI state library is unnecessary for the current state boundaries. Local account records contain salted password hashes, and project documents live in IndexedDB. The GitHub token stays in page memory.
+
+React provides the component model, React Router links directly to project sections, and Vite supports fast local startup and lazy chunks. Zod validates data crossing browser-storage and API boundaries. The custom UI uses Poppins, shared palette tokens, standard controls and native dialogs to match the project designs. Global CSS supplies breakpoints and keyboard focus styling. The task document parser uses a lazily loaded PDF.js worker.
+
+### Navigation and runtime states
+
+```mermaid
+flowchart LR
+    Guest["Signed out"] --> Login["/login"]
+    Login --> Register["/register"]
+    Login -. Local demo .-> Reset["/reset-password"]
+    Reset --> Login
+    Login --> Projects["/projects"]
+    Register --> Login
+    Projects --> Tasks["/projects/:projectId/tasks"]
+    Tasks --- Sections["Chat · Analytics · Decisions · Settings"]
+    Tasks --- Inbox["/inbox"]
+    Tasks --- Profile["/profile"]
+    Profile --> Login
+```
+
+Opening a project lands on Tasks. Server-mode project creation opens Tasks. The browser-only demo still opens Settings. Inbox and Profile have global routes. The workspace preserves the header and sidebar during lazy loading. Unmatched routes show a 404, while route and render exceptions use a shared failure panel.
+
+### API and diagnostics
+
+Repository verification uses a separate GitHub HTTP client. `verifyGitHubRepository` makes a read-only `GET https://api.github.com/repos/{owner}/{repo}` request with the provided bearer token and a 15-second timeout. The controller uses the HTTP status and optional quota headers. It does not read or persist the response body.
+
+```http
+GET /repos/example/project HTTP/1.1
+Host: api.github.com
+Accept: application/vnd.github+json
+Authorization: Bearer <supplied-at-runtime>
+
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 5000
+X-RateLimit-Remaining: 4999
+X-RateLimit-Reset: 1795554000
+```
+
+The settings page displays distinct feedback for credential and permissions errors, missing repositories, quota limits and request failures. Axios is configured for same-origin `/api/v1` through the Vite proxy. Its interceptor extracts validated diagnostic IDs from Problem Details responses. The frontend consumes the auth and project contracts described in the next section. Logs use fixed event names and allowlisted status and diagnostic IDs. Headers, passwords, tokens, request bodies and document contents are excluded.
+
+Validation commands are in the [frontend guide](../../frontend/README.md#checks). ESLint checks Hooks, import cycles, layer direction and explicit `any`. External data should use `unknown` and be narrowed before use. An exception requires a line-scoped explanation.
+
+### Auth and project access
+
+The client follows `docs/api/openapi.yaml` and DEC-02 on the checked `origin/develop` revision (`c472aac`). All paths below are relative to `/api/v1`.
+
+| Method and path | Request | Response |
+| --- | --- | --- |
+| `GET /auth/csrf` | Same-origin credentials | `200` with `{"headerName":"X-CSRF-Token","token":"<csrf>"}` and a scoped CSRF cookie |
+| `POST /auth/register` | CSRF header, `{"email":"name@example.test","displayName":"Name","password":"<user input>"}` | `201` with a User DTO. The UI returns to sign-in. |
+| `POST /auth/login` | CSRF header, email and password | `200` with `{"accessToken":"<jwt>","tokenType":"Bearer","expiresIn":900,"user":{…}}` and refresh cookie |
+| `POST /auth/refresh` | CSRF header and refresh cookie, empty body | `200` with the session DTO and rotated cookie, or `401 REFRESH_INVALID` |
+| `POST /auth/logout` | CSRF header and refresh cookie, empty body | `204` with cookies cleared |
+| `GET /projects`, `GET /projects/{id}` | Access bearer token | Page of project entries or a project entry containing `id`, `name`, `status` and `myRole`. Unavailable projects return `404`. |
+| `POST /projects` | Access bearer token, `{"name":"Example project"}` | `201` with the newly created project |
+
+The User DTO includes `id`, `email`, `displayName`, `isActive`, `createdAt` and `updatedAt`. Zod validates responses used by the UI. Registration accepts 12–128 Unicode code points and at most 512 UTF-8 bytes, as specified by the auth contract.
+
+The auth store holds the access JWT in memory and reads no refresh cookie from JavaScript. The browser sends the backend-issued HttpOnly, Secure, SameSite=Lax cookie. Startup refresh blocks protected UI, and an in-tab single flight deduplicates refreshes. Where Web Locks are available, cookie-changing auth operations are serialized across tabs. Logout removes private UI and cached queries immediately, then requests revocation. Failed refresh closes the session. Private routes preserve a validated internal return location, and project pages wait for a successful project access response. Owner/member controls derive from the backend's `myRole`. Tasks, chat and other prototype data still use account-scoped browser stores.
+
+Problem Details code, field identifiers and diagnostic IDs are parsed centrally. UI copy is selected locally for 401, 403, 404, 409, 429, 5xx, timeouts and connectivity errors. The auth store replays at most one GET or HEAD after a successful refresh. Mutations are never automatically replayed. The transport exposes Retry-After as a deadline and does not automatically retry throttled or failed requests. Unmounted route operations cancel with an AbortSignal.
+
+`npm run dev:mock` starts the opt-in loopback HTTP mock. It exercises the frontend contract using in-memory fixtures. The browser-only demo is a separate mode for prototype flows. Password recovery, account updates and account deletion have no backend contract in this revision.
+### Project workspace and lifecycle
+
+The dashboard at `/projects` loads the membership-filtered project list through the paginated API and shows role and status. Users can search by name, filter Active or Archived, sort names, and create a project from the dashboard or sidebar. Selecting a sidebar project preserves the top-level Tasks, Decisions, Chat, Analytics or Settings module. Deep actions, search parameters and drafts do not carry over to another project. The project index opens Tasks.
+
+The shared shell preflights `GET /projects/{id}` before mounting a lazy feature. It uses the returned `myRole` and `status`, shows an archive banner, and presents distinct permission and hidden-resource errors. Project ID changes cancel previous reads and remount feature state. Document query keys include account and project ID. IndexedDB reads use the query cancellation signal.
+
+| Operation | Contract |
+| --- | --- |
+| Edit project name and description | `PATCH /projects/{id}` with `name` and nullable `description` |
+| List project members | `GET /projects/{id}/members?page=0` and subsequent pages. DTO contains user ID, display name, role and join time. |
+| Add or remove a registered member | `POST /projects/{id}/members` with `email`, or `DELETE /projects/{id}/members/{userId}` |
+| Transfer ownership | `POST /projects/{id}/transfer-ownership` with `newOwnerUserId`. The response reflects the caller's new role. |
+| Archive project | `POST /projects/{id}/archive` with no request body. The response updates the current shell and list. |
+
+Owner controls require an active project for metadata, membership, transfer and archive. GitHub settings are Owner-only and the preview controls are disabled for archived projects. The checked OpenAPI contract has no project GitHub configuration endpoint. The frontend uses the existing repository verification preview. Archived routes keep member lists, task details, decision filters, existing chat views and analytics available. The frontend blocks new content, editing, generation and publication, including direct links to task creation or proposal submission. API authorization remains the final enforcement for server-backed data.
+
+### Planning and Tasks
+
+The checked OpenAPI has no specification, decomposition operation, backlog or publication endpoints. The API tables for these capabilities below are proposals for future integration. The Tasks screen explicitly labels its browser-backed Planning preview. Decomposition uses a local text parser. The preview presents three timed stages for text extraction, decomposition and graph validation, with an elapsed timer. It displays the saved result or an error when finished. It pauses while the document is hidden and cancels scheduled work when the route unmounts. No server polling or percentage is displayed. When a server operation contract becomes available, polling should start at 2 seconds, back off to at most 5 seconds, and stop on terminal status, navigation or hidden-page policy.
+
+Specification versions and files are saved in one IndexedDB transaction per upload, with account/project isolation, version, author and upload time. UTF-8 TXT and text-layer PDF are limited to 10 MiB and 200,000 extracted characters. A new local decomposition references its source version and retains the previous backlog in history. The local editor checks the local revision before writing. The Tasks screen highlights cycles in the saved draft and disables confirmation until the graph is valid. The server will still need transactional revision checks and structured DAG problem details.
+
+Owner confirmation applies to the current valid revision. Edits to a confirmed unpublished backlog clear approval. Archived projects are read-only. Local records with publication already started lock structural editing and retain existing status badges and safe GitHub issue links. The publication button displays connection feedback inline while the publishing API is unavailable. Publishing, reconciling and retrying remote issues require an API contract.
+
+## Target architecture and planned API contracts
+
+The remaining sections describe the intended server-backed system. They are retained as implementation contracts for subsequent tasks.
+
 ---
 
 ## 1. Architectural Overview & Design Principles
@@ -11,7 +137,7 @@ The frontend of Team AI Orchestrator is a desktop-first Single-Page Application 
 2. **Backend-Authoritative Security & Validation:** UI role checks (`Owner` vs. `Member`) and Zod form schemas improve usability and prevent invalid submissions, but the backend remains the sole authority for RBAC, DAG acyclicity, and state transitions.
 3. **Domain-Aligned Feature Modules:** Code is organized by business domain (`planning`, `decisions`, `chat`, `github`, `analytics`) mirroring the Spring Boot modular monolith (`SRS §11.2`), avoiding monolithic `components/` or `utils/` folders.
 4. **Explicit Four-State UI Contract:** Every data-fetching view implements `Loading`, `Empty`, `Error` (RFC 9457 Problem Details), and `Populated` states (`NFR-UX-001`).
-5. **Zero-Persistence Token Security:** In compliance with `DEC-02`, JWT access tokens (`15 min` TTL) live strictly in JavaScript memory; refresh tokens (`7 days` TTL) are handled via `HttpOnly; Secure; SameSite=Strict` cookies.
+5. **Zero-Persistence Token Security:** In compliance with `DEC-02`, JWT access tokens (`15 min` TTL) live strictly in JavaScript memory; refresh tokens (`7 days` TTL) are handled via `HttpOnly; Secure; SameSite=Lax` cookies.
 
 ---
 
@@ -197,8 +323,8 @@ All REST API data lives in TanStack Query's normalized cache, keyed hierarchical
 | Method & Endpoint | Request Payload | Expected Success Response | Error Codes |
 |---|---|---|---|
 | `POST /auth/register` | `{ "email": "string", "displayName": "string", "password": "string (min 8)" }` | `201 Created`: `{ "user": { "id": "uuid", "email": "string", "displayName": "string" } }` | `400` (validation), `409` (`EMAIL_ALREADY_EXISTS`) |
-| `POST /auth/login` | `{ "email": "string", "password": "string" }` | `200 OK` + `Set-Cookie: refresh_token=...; HttpOnly; Secure; SameSite=Strict`:<br>`{ "accessToken": "jwt", "expiresInSeconds": 900, "user": { "id": "uuid", "email": "string", "displayName": "string" } }` | `401` (`INVALID_CREDENTIALS`), `429` (rate limit) |
-| `POST /auth/refresh` | Empty body (uses `HttpOnly` cookie) | `200 OK` + rotated `Set-Cookie`:<br>`{ "accessToken": "jwt", "expiresInSeconds": 900, "user": { ... } }` | `401` (`REFRESH_TOKEN_INVALID_OR_EXPIRED`) |
+| `POST /auth/login` | `{ "email": "string", "password": "string" }` | `200 OK` + `Set-Cookie: refresh_token=...; HttpOnly; Secure; SameSite=Lax`:<br>`{ "accessToken": "jwt", "expiresIn": 900, "user": { "id": "uuid", "email": "string", "displayName": "string" } }` | `401` (`INVALID_CREDENTIALS`), `429` (rate limit) |
+| `POST /auth/refresh` | Empty body (uses `HttpOnly` cookie) | `200 OK` + rotated `Set-Cookie`:<br>`{ "accessToken": "jwt", "expiresIn": 900, "user": { ... } }` | `401` (`REFRESH_INVALID`) |
 | `POST /auth/logout` | Empty body (uses `HttpOnly` cookie) | `204 No Content` (clears cookie & revokes DB refresh session) | `401` |
 | `GET /auth/me` | - | `200 OK`: `{ "id": "uuid", "email": "string", "displayName": "string" }` | `401` |
 

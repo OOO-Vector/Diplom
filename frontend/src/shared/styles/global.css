@@ -1,0 +1,167 @@
+@import "./tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font: var(--font-body) / 1.6 var(--font-family);
+}
+
+a {
+  color: var(--primary);
+}
+
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.panel {
+  background: var(--surface);
+}
+
+.workspace,
+.failure-state {
+  padding: var(--space-5);
+}
+
+.panel {
+  max-width: 56rem;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.panel h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-title);
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.panel p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.app-body:has(.workspace > .loading-state),
+.workspace:has(> .loading-state) {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace:has(> .loading-state--overlay) {
+  position: relative;
+  min-block-size: 12rem;
+}
+
+.workspace:has(> .loading-state) {
+  flex: 1;
+  background: #fff;
+}
+
+.panel p + .button {
+  margin-top: var(--space-3);
+}
+
+.button {
+  display: inline-block;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-3);
+  background: var(--primary);
+  color: var(--surface);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--primary-hover);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1;
+  inset: var(--space-2) auto auto var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+@media (max-width: 64rem) {
+  .workspace,
+  .failure-state {
+    padding-inline: var(--space-3);
+  }
+}
+
+@media (max-width: 42rem) {
+  .app-shell {
+    display: block;
+  }
+}
+.project-archive-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  background: var(--workspace-selected);
+}
+
+@media (max-width: 42rem) {
+  .project-sidebar__projects {
+    max-block-size: min(40vh, 18rem);
+    overflow-y: auto;
+  }
+
+  .app-header__sections .app-header__item {
+    min-block-size: 2.75rem;
+  }
+}
+
+/* Shared scrollbar for the workspace, lists and form fields. */
+*::-webkit-scrollbar {
+  width: clamp(7px, 0.863vw, 19px);
+  height: clamp(7px, 0.863vw, 19px);
+}
+
+*::-webkit-scrollbar-track {
+  border: 1px solid #808080;
+  background: #d9d9d9;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 1px solid #707070;
+  background: #a6a6a6;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: #a6a6a6 #d9d9d9;
+    scrollbar-width: thin;
+  }
+}
