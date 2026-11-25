@@ -24,12 +24,6 @@
   padding-inline: calc(18 * var(--sidebar-unit));
 }
 
-.chat-sidebar__docs-icon {
-  flex: 0 0 calc(37 * var(--sidebar-unit));
-  inline-size: calc(37 * var(--sidebar-unit));
-  block-size: calc(48 * var(--sidebar-unit));
-}
-
 .chat-sidebar__document-icon {
   flex: 0 0 calc(36 * var(--sidebar-unit));
   block-size: calc(46 * var(--sidebar-unit));
@@ -55,5 +49,5 @@
 .chat-sidebar__list button[aria-current="true"],
 .chat-sidebar__list button:enabled:hover {
   border-color: #000;
-  background: var(--workspace-selected);
+  background: #ffbf6b;
 }

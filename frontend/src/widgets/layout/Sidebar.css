@@ -1,4 +1,4 @@
-﻿.project-sidebar {
+.project-sidebar {
   /* Match the Figma dimensions at 2202px and scale down for smaller windows. */
   --sidebar-unit: clamp(0.55px, 0.045413vw, 1px);
   --sidebar-toggle-size: calc(60 * var(--sidebar-unit));
@@ -8,7 +8,7 @@
   position: relative;
   inline-size: calc(470 * var(--sidebar-unit));
   padding-inline: var(--sidebar-gutter);
-  background: var(--workspace-chrome);
+  background: #eaeaea;
   border-inline-end: 1px solid #000;
   color: #000;
   font-size: calc(32 * var(--sidebar-unit));
@@ -30,7 +30,7 @@
   padding: 0;
   border: 1px solid #000;
   border-radius: calc(15 * var(--sidebar-unit));
-  background: var(--workspace-action);
+  background: #b5ebff;
   color: inherit;
   font-size: calc(40 * var(--sidebar-unit));
   line-height: 1;
@@ -80,7 +80,7 @@
   padding: 0.2em 0.35em;
   border: 1px solid currentColor;
   border-radius: 0.35em;
-  background: var(--workspace-chrome);
+  background: #fff;
   color: inherit;
   font: inherit;
 }
@@ -175,7 +175,7 @@
 .project-sidebar__projects a:hover,
 .project-sidebar__projects a[aria-current="true"] {
   border-color: #000;
-  background: var(--workspace-selected);
+  background: #ffbf6b;
 }
 
 @media (max-width: 42rem) {
@@ -190,51 +190,4 @@
   .project-sidebar[data-collapsed="true"] .project-sidebar__toggle {
     inset-inline: auto var(--sidebar-gutter);
   }
-}
-
-.project-sidebar__search input::-webkit-search-cancel-button {
-  appearance: none;
-  display: none;
-}
-
-.project-sidebar__search {
-  position: relative;
-}
-
-.project-sidebar__search:has(.project-sidebar__clear) input {
-  padding-inline-end: max(2rem, calc(42 * var(--sidebar-unit)));
-}
-
-.project-sidebar__clear {
-  position: absolute;
-  inset-inline-end: 0;
-  display: grid;
-  place-items: center;
-  inline-size: max(2rem, calc(42 * var(--sidebar-unit)));
-  block-size: max(2rem, calc(42 * var(--sidebar-unit)));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #000;
-  cursor: pointer;
-}
-
-.project-sidebar__clear span {
-  inline-size: max(12px, calc(25 * var(--sidebar-unit)));
-  aspect-ratio: 1;
-  background: currentColor;
-  clip-path: polygon(
-    16% 0,
-    50% 34%,
-    84% 0,
-    100% 16%,
-    66% 50%,
-    100% 84%,
-    84% 100%,
-    50% 66%,
-    16% 100%,
-    0 84%,
-    34% 50%,
-    0 16%
-  );
 }
