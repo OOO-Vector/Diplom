@@ -34,7 +34,8 @@ public class SecurityConfiguration {
     }
     @Bean @Order(1)
     SecurityFilterChain browserAuth(HttpSecurity http, CookieCsrfTokenRepository csrf, ApiProblems problems,
-                                   @Value("${app.security.allowed-origins}") List<String> origins) throws Exception {
+                                   @Value("${app.security.allowed-origins}") List<String> origins,
+                                   tools.jackson.databind.ObjectMapper json) throws Exception {
         if (origins.isEmpty()) throw new IllegalArgumentException("Configure HTTPS browser origins");
         for (String origin : origins) {
             URI uri = URI.create(origin);
@@ -50,9 +51,19 @@ public class SecurityConfiguration {
         cors.setAllowedHeaders(List.of("Content-Type", "X-CSRF-Token"));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/auth/**", cors);
+        var corsFilter = new CorsFilter(source);
+        corsFilter.setCorsProcessor(new DefaultCorsProcessor() {
+            @Override protected void rejectRequest(org.springframework.http.server.ServerHttpResponse response)
+                    throws java.io.IOException {
+                response.setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
+                response.getHeaders().setContentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
+                response.getHeaders().setCacheControl("no-store");
+                json.writeValue(response.getBody(), problems.body(403, "CSRF_INVALID", "CSRF validation failed"));
+            }
+        });
         stateless(http);
         return http.securityMatcher("/api/v1/auth/**")
-                .cors(c -> c.configurationSource(source))
+                .cors(c -> c.disable()).addFilterAt(corsFilter, CorsFilter.class)
                 .csrf(c -> c.csrfTokenRepository(csrf).csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler()))
                 .addFilterBefore(new BrowserAuthFilter(origins, problems), CorsFilter.class)
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
@@ -79,7 +90,9 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .requestMatchers("/api/v1/projects", "/api/v1/projects/**").authenticated()
                         .anyRequest().denyAll())
-                .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
+                .exceptionHandling(e -> e.accessDeniedHandler((request, response, ex) ->
+                        problems.write(request, response, 403, "FORBIDDEN", "Access denied"))
+                        .authenticationEntryPoint((request, response, ex) -> {
                     response.setHeader("WWW-Authenticate", "Bearer");
                     problems.write(request, response, 401, "AUTH_REQUIRED", "Authentication required or invalid credentials");
                 })).build();

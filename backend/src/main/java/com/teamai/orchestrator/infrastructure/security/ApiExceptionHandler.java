@@ -19,18 +19,37 @@ public class ApiExceptionHandler {
                 .cacheControl(CacheControl.noStore()).body(problems.body(status, code, title));
     }
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
-            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.ServletRequestBindingException.class})
     public ResponseEntity<?> invalid() { return response(400, "VALIDATION_ERROR", "Invalid request"); }
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    public ResponseEntity<?> methodValidation(org.springframework.web.method.annotation.HandlerMethodValidationException exception) {
+        return exception.isForReturnValue() ? unexpected(exception) : invalid();
+    }
     @ExceptionHandler(com.teamai.orchestrator.core.application.CoreException.class)
     public ResponseEntity<?> core(com.teamai.orchestrator.core.application.CoreException exception) {
         return response(exception.status(), exception.code(), exception.getMessage());
     }
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<?> unauthorized(HttpServletRequest request) {
-        return (request.getContextPath() + "/api/v1/auth/login").equals(request.getRequestURI())
-                ? response(401, "INVALID_CREDENTIALS", "Invalid credentials")
-                : response(401, "AUTH_REQUIRED", "Authentication required or invalid credentials");
+        if ((request.getContextPath() + "/api/v1/auth/login").equals(request.getRequestURI())) {
+            return response(401, "INVALID_CREDENTIALS", "Invalid credentials");
+        }
+        return ResponseEntity.status(401).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .cacheControl(CacheControl.noStore()).header("WWW-Authenticate", "Bearer error=\"invalid_token\"")
+                .body(problems.body(401, "AUTH_REQUIRED", "Authentication required or invalid credentials"));
     }
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> method(org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+        var supported = exception.getSupportedHttpMethods();
+        return ResponseEntity.status(405).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .cacheControl(CacheControl.noStore()).allow(supported == null ? new HttpMethod[0] : supported.toArray(HttpMethod[]::new))
+                .body(problems.body(405, "METHOD_NOT_ALLOWED", "Method not allowed"));
+    }
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<?> missing() { return response(404, "NOT_FOUND", "Resource not found"); }
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<?> unacceptable() { return response(406, "NOT_ACCEPTABLE", "Response media type not acceptable"); }
     @ExceptionHandler(AuthRateLimiter.Limited.class)
     public ResponseEntity<?> limited(AuthRateLimiter.Limited exception) {
         return ResponseEntity.status(429).contentType(MediaType.APPLICATION_PROBLEM_JSON).cacheControl(CacheControl.noStore())

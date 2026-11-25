@@ -197,12 +197,50 @@ For detailed design and evidence, see:
 
 ## Testing and Reproducibility
 
-From `backend/`, run `gradlew.bat test securitySpike schemaTest bootJar --console=plain` (or `./gradlew` on Unix).
+From `backend/`, with JDK 21, Docker and Node.js 24 (for the pinned contract validator), run:
+
+```powershell
+.\gradlew.bat clean test securitySpike schemaTest openApiValidate jacocoTestReport jacocoTestCoverageVerification bootJar --rerun-tasks --console=plain
+```
+
+On Linux use `./gradlew` with the same arguments. `./gradlew check bootJar` also runs all quality gates.
 `test` uses disposable PostgreSQL 16/pgvector through Testcontainers and the real migrations, with separate app/admin roles;
 it generates temporary RSA keys and credentials, independent of the local `.env` and development database.
 `securitySpike` is the isolated SET-01 library suite; `schemaTest` verifies clean install, 001–012 upgrade and 013 constraints/grants.
 Docker must be running. Reports remain local under `backend/build/reports/tests/` and are ignored by Git.
 These suites do not rerun all 78 historical SQL checks tracked separately by DB-014.
+
+Tests run sequentially in one worker; race tests create their own concurrent requests and synchronize through PostgreSQL
+lock observations, not arbitrary sleeps. Committed Core fixtures are deleted after each integration test using only the
+disposable container's admin connection, in a transaction with deferred constraints. No production grants are expanded.
+Testcontainers/Ryuk removes disposable containers; temporary signing-key files are removed when the test JVM exits.
+Run from `backend/` so `../database/security/002-init-roles.sh` resolves correctly. Git attributes enforce LF for shell scripts.
+
+**Coverage:** JaCoCo 0.8.14 generates `backend/build/reports/jacoco/test/html/index.html` and `jacocoTestReport.xml`.
+The report includes all main classes. The mandatory 70% LINE/COVEREDRATIO gate aggregates every compiled class under
+`com/teamai/orchestrator/core/**`: services, domain, controllers, persistence and DTOs, without exclusions inside Core.
+Bootstrap and `infrastructure/**` remain visible in the full report but do not enter the Core threshold. Only `test`
+execution data enters this gate; spike and schema tests do not inflate production coverage. Calculate Core percentage
+by summing the package-level LINE covered/missed counters for `com/teamai/orchestrator/core/*`, not the report root
+(which also includes infrastructure), then `covered / (covered + missed) * 100`.
+
+**Contracts:** `openApiValidate` executes Redocly CLI **2.82.0**, `spec` ruleset, against `docs/api/openapi.yaml`.
+It fails the build on YAML/duplicate-key, reference and OpenAPI structural/schema errors; output is stored under
+`backend/build/reports/contracts/openapi.txt`, including failed validation. npm downloads the pinned tool on first use.
+Separately, `CoreContractTests` uses test-only Atlassian validator **2.46.1** against actual MockMvc responses with the
+real security chain, services and PostgreSQL. It checks representative responses across all Core routes, schemas,
+media types and status codes, including negative assertions against malformed responses. It is not exhaustive runtime
+parity for every documented error nor a deployed-network/proxy test. CORS preflight is tested separately from API operations.
+Run only these tests with `gradlew.bat test --tests '*CoreContractTests'`; rerun the complete suite before reporting coverage.
+
+**CI:** `.github/workflows/backend-quality.yml` runs on PRs targeting `develop` and manual `workflow_dispatch`, using
+Ubuntu 24.04, Java 21, Node 24, the committed Gradle wrapper and Gradle dependency caching. It requires no repository
+secrets, uses read-only contents permission and uploads JUnit, HTML, coverage and contract reports even on failure.
+Any unsuccessful Gradle task fails the job; artifact upload does not mask failure. To verify failure detection locally,
+temporarily duplicate the root `openapi` key, run `openApiValidate`, confirm a nonzero exit, and restore the exact original
+file before running the successful gate. Never commit the broken specification. A remote green run requires actual
+GitHub execution; local success is not remote CI evidence. A new workflow may need to reach the default branch before
+GitHub exposes manual dispatch; do not create a PR or merge solely to claim a green run.
 
 Database development has included **78 SQL integrity checks**, schema and role audits, concurrency scenarios, and performance experiments. These tests are stored separately from the Java test suite in `database/tests/`.
 
