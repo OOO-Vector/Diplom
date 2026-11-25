@@ -1,1 +1,0 @@
-import{j as s,P as t,a as e}from"./index-BEJCrwnk.js";function o(){return s.jsxs(t,{title:"Page not found",children:[s.jsx("p",{children:"This address does not match a workspace page."}),s.jsx(e,{className:"button",to:"/projects",children:"Back to projects"})]})}export{o as default};
