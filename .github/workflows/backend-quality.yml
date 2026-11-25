@@ -26,6 +26,62 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify backend and contract
         run: bash ./gradlew clean test securitySpike schemaTest openApiValidate jacocoTestReport jacocoTestCoverageVerification bootJar --rerun-tasks --console=plain
+      - name: Summarize backend line coverage
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("build/reports/jacoco/test/jacocoTestReport.xml")
+          print("## Backend line coverage (JaCoCo)")
+          print()
+          if not report.is_file():
+              print("JaCoCo XML report was not generated (the verification step may have failed before producing it).")
+              raise SystemExit(0)
+
+          root = ET.parse(report).getroot()
+
+          def line_counts(element):
+              counter = next((item for item in element.findall("counter") if item.get("type") == "LINE"), None)
+              if counter is None:
+                  return 0, 0
+              return int(counter.get("covered", "0")), int(counter.get("missed", "0"))
+
+          core_covered = core_missed = 0
+          for package in root.findall("package"):
+              name = package.get("name", "")
+              if name == "com/teamai/orchestrator/core" or name.startswith("com/teamai/orchestrator/core/"):
+                  covered, missed = line_counts(package)
+                  core_covered += covered
+                  core_missed += missed
+
+          total_covered, total_missed = line_counts(root)
+
+          def report_counts(label, covered, missed, scope):
+              total = covered + missed
+              if total == 0:
+                  print(f"- **{label}:** no line counters found ({scope}).")
+              else:
+                  pct = covered * 100 / total
+                  print(f"- **{label}: {covered} / {total} lines ({pct:.2f}%).** {scope}")
+
+          report_counts(
+              "Core threshold scope",
+              core_covered,
+              core_missed,
+              "`com/teamai/orchestrator/core/**`; JaCoCo's enforced minimum is 70%.",
+          )
+          report_counts(
+              "Backend report total (informational)",
+              total_covered,
+              total_missed,
+              "All classes included in this JaCoCo report; no 70% threshold is asserted for this aggregate.",
+          )
+          print()
+          print("The uploaded JaCoCo HTML/XML report is the detailed source of truth; Core coverage is not whole-backend coverage.")
+          PY
       - name: Upload verification reports
         if: always()
         uses: actions/upload-artifact@v4
