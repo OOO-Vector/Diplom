@@ -1,0 +1,63 @@
+name: Frontend quality
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [FE, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:coverage
+      - name: Summarize frontend line coverage
+        if: always()
+        shell: bash
+        run: |
+          summary='coverage/coverage-summary.json'
+          if [ ! -f "$summary" ]; then
+            {
+              echo '## Frontend line coverage'
+              echo
+              echo 'Coverage summary was not generated (the test/coverage step may have failed before producing it).'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node --input-type=commonjs -e '
+            const { lines } = require("./coverage/coverage-summary.json").total;
+            console.log("## Frontend line coverage");
+            console.log("");
+            console.log(`**${lines.covered} / ${lines.total} lines covered (${lines.pct}%).**`);
+            console.log("");
+            console.log("Scope: all included `frontend/src/**/*.ts` and `frontend/src/**/*.tsx` files; the Vitest 70% line threshold is enforced by `npm run test:coverage`.");
+          ' >> "$GITHUB_STEP_SUMMARY"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-quality-${{ github.sha }}
+          path: |
+            frontend/coverage/
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14

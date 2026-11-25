@@ -1,0 +1,21 @@
+:root {
+  --font-family: "Poppins", system-ui, sans-serif;
+  --font-body: 0.875rem;
+  --font-title: 1.5rem;
+  --canvas: #f8fafc;
+  --surface: #fff;
+  --text: #172033;
+  --muted: #475569;
+  --border: #cbd5e1;
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --active-text: #9a3412;
+  --active-surface: #fff1e7;
+  --focus: #1d4ed8;
+  --space-1: 0.5rem;
+  --space-2: 0.75rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2rem;
+  --radius: 0.5rem;
+}
