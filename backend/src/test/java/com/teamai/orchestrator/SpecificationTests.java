@@ -10,7 +10,6 @@ import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -25,13 +24,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class SpecificationTests extends ProjectApiTestSupport {
     @MockitoSpyBean SpecificationRepository specifications;
     String path(UUID project) { return "/api/v1/projects/" + project + "/specifications"; }
-    MockHttpServletRequestBuilder upload(User actor, UUID project, byte[] data, String filename, String type) {
-        return as(actor, post(path(project)).param("title", " Specification ").param("filename", filename).contentType(type).content(data));
+    org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder upload(User actor, UUID project, byte[] data, String filename, String type) {
+        var file = new org.springframework.mock.web.MockPart("file", filename, data);
+        file.getHeaders().setContentType(org.springframework.http.MediaType.parseMediaType(type));
+        return multipart(path(project)).part(file, new org.springframework.mock.web.MockPart("title", " Specification ".getBytes(StandardCharsets.UTF_8))).header("Authorization", "Bearer " + tokens.issue(actor.getId()));
     }
-    MockHttpServletRequestBuilder txt(User actor, UUID project, String text) {
+    org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder txt(User actor, UUID project, String text) {
         return upload(actor, project, text.getBytes(StandardCharsets.UTF_8), "requirements.txt", "text/plain;charset=UTF-8");
     }
-    MockHttpServletResponse check(MockHttpServletRequestBuilder request, int status) throws Exception {
+    MockHttpServletResponse check(org.springframework.test.web.servlet.RequestBuilder request, int status) throws Exception {
         var result = mvc.perform(request).andReturn(); var response = result.getResponse();
         assertEquals(status, response.getStatus());
         var modeled = SimpleResponse.Builder.status(status);
@@ -119,11 +120,11 @@ class SpecificationTests extends ProjectApiTestSupport {
     }
     @Test void validatesMetadataAndDoesNotTrustOwnershipParameters() throws Exception {
         var actor=actor();var project=create(actor);
-        check(as(actor,post(path(project)).param("filename","x.txt").contentType("text/plain").content("x")),400);
-        check(txt(actor,project,"x").param("title","extra"),400);
+        check(multipart(path(project)).part(new org.springframework.mock.web.MockPart("file","x.txt",new byte[]{120})).header("Authorization", "Bearer " + tokens.issue(actor.getId())),400);
+        check(txt(actor,project,"x").queryParam("title","extra"),400);
         check(upload(actor,project,"x".getBytes(),"x".repeat(256)+".txt","text/plain"),400);
         check(as(actor,get(path(project)).param("size","101")),400);
-        check(txt(actor,project,"untrusted attribution").param("version","900").param("uploadedBy",UUID.randomUUID().toString()),400);
+        check(txt(actor,project,"untrusted attribution").queryParam("version","900").queryParam("uploadedBy",UUID.randomUUID().toString()),400);
         var response=check(txt(actor,project,"trusted server attribution"),201);
         var result=json.readTree(response.getContentAsString());assertEquals(1,result.get("version").asInt());assertEquals(actor.getId().toString(),result.get("uploadedBy").asString());
     }

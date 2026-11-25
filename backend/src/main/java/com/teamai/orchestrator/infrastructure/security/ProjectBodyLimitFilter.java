@@ -13,7 +13,7 @@ final class ProjectBodyLimitFilter extends OncePerRequestFilter {
     ProjectBodyLimitFilter(ApiProblems problems) { this.problems = problems; }
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        // Raw specification streams are bounded by the import service, after project authorization.
+        // Specification multipart parsing has servlet file/request bounds; extraction retains its own file bound.
         if (request.getMethod().equals("POST") && path.matches("/api/v1/projects/[^/]+/specifications")) return true;
         return !(path.equals("/api/v1/projects") || path.startsWith("/api/v1/projects/"))
                 || !Set.of("POST", "PATCH", "DELETE").contains(request.getMethod());

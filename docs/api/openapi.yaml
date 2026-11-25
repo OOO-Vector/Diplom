@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Core & Access API contract. Authentication and current user are implemented through CORE-04;
     project/member routes are implemented for CORE-05/06 external review. Project POST/PATCH/DELETE request bodies
-    are limited to 32 KiB except raw specification uploads (10 MiB). Framework-level method/content negotiation failures use the Problem schema
+    are limited to 32 KiB except specification multipart uploads (10 MiB file, 11 MiB request). Framework-level method/content negotiation failures use the Problem schema
     (405 METHOD_NOT_ALLOWED with Allow; 406 NOT_ACCEPTABLE). Unknown nested routes use 404 NOT_FOUND;
     authenticated routes outside the allowlist use 403 FORBIDDEN. Deployment is not claimed.
 servers:
@@ -2180,38 +2180,46 @@ paths:
       operationId: uploadSpecification
       summary: Import an immutable specification version
       description: >-
-        Owner or Member of an active project. Raw file bytes, not multipart or JSON.
-        Required title and filename query parameters are metadata only; duplicate/unknown parameters are rejected.
+        Owner or Member of an active project. Multipart form-data with exactly one file part and one title field.
+        Missing, duplicate, unknown or wrongly typed parts and query parameters are rejected with 400 VALIDATION_ERROR.
+        Original filename comes exclusively from the file part Content-Disposition, never from a query parameter.
         Actor and version are server assigned.
-        At most 10 MiB and 200000 extracted Unicode code points. UTF-8 TXT (optional BOM) or text-layer PDF only;
+        At most 10 MiB per file, 11 MiB for the entire request including multipart overhead, and 200000 extracted Unicode code points.
+        Multipart part headers are limited to 4 KiB.
+        Title is UTF-8, at most 800 bytes and 200 Unicode code points after trimming. UTF-8 TXT (optional BOM) or text-layer PDF only;
         filename extension and media type must agree with validated content. No OCR or execution of document instructions.
         Filenames are reduced to a basename; control/format and unsafe filename punctuation are replaced with underscores.
         Invalid/empty/encrypted/image-only documents return 400 INVALID_SPECIFICATION. Invalid metadata returns 400 VALIDATION_ERROR.
-        File size returns 413 PAYLOAD_TOO_LARGE; text length returns 413 SPECIFICATION_TEXT_TOO_LARGE.
+        File or multipart request size returns 413 PAYLOAD_TOO_LARGE; text length returns 413 SPECIFICATION_TEXT_TOO_LARGE.
         Archived projects return 409 PROJECT_ARCHIVED; exhausted integer versions return 409 SPECIFICATION_VERSION_LIMIT.
         PDF processing bounds (1000 pages, 400000 glyphs, 1000000 operators, cooperative 10-second budget) return 422 SPECIFICATION_PROCESSING_LIMIT.
         Two concurrent extraction slots per process; saturation returns 429 IMPORT_BUSY. Retry later without automatic retry of a committed upload.
         Each successful upload creates a new version; no idempotency key is supported.
       security:
       - bearerAuth: []
-      parameters:
-      - name: title
-        in: query
-        required: true
-        schema: {type: string, minLength: 1, maxLength: 200}
-        description: Trimmed nonblank title; no control characters.
-      - name: filename
-        in: query
-        required: true
-        schema: {type: string, minLength: 1}
-        description: Original filename; sanitized basename must contain 1–255 Unicode characters and end in .txt or .pdf.
       requestBody:
         required: true
         content:
-          text/plain:
-            schema: {type: string, format: binary}
-          application/pdf:
-            schema: {type: string, format: binary}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, title]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: TXT/PDF; sanitized filename must contain 1–255 Unicode characters and end in .txt or .pdf.
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Trimmed nonblank UTF-8 title; no control characters.
+            encoding:
+              file:
+                contentType: text/plain, application/pdf
+              title:
+                contentType: text/plain; charset=UTF-8
       responses:
         '201':
           description: Version committed; no decomposition started

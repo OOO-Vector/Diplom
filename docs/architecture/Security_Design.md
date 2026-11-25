@@ -5,8 +5,15 @@
 ## 1. Trust boundaries and threat model
 
 Specification import uses the bearer-only project chain. POST `/api/v1/projects/{projectId}/specifications` accepts
-raw TXT/PDF bytes with title/filename query metadata; it has a separate 10 MiB streaming bound and is the sole exception
-to the project JSON 32 KiB filter. Authentication and membership/state prechecks precede reading the stream. Both Owner
+multipart/form-data with exactly one file and one UTF-8 title part (800 bytes maximum); the filename comes from the file part.
+Missing/duplicate/unknown parts and query parameters return 400. Spring servlet multipart bounds are 10 MiB/file and
+11 MiB/request (including overhead), with a zero disk-spill threshold and automatic per-request temporary-file cleanup.
+Part headers are bounded to 4 KiB, allowing the existing Unicode filename contract.
+The extractor independently retains its 10 MiB streaming bound. This route is the sole exception to the project JSON 32 KiB
+filter. Bearer authentication precedes multipart parsing; membership/state checks precede extraction, but bounded multipart
+staging can occur before that project check. Size errors map to 413 PAYLOAD_TOO_LARGE; malformed multipart to 400 VALIDATION_ERROR.
+Tomcat's rejected-body drain is bounded to 12 MiB. Deployments must also bound concurrency and temporary-directory capacity.
+Both Owner
 and Member may import; a second membership/state check runs under the project row lock before allocating `max(version)+1`
 and inserting. Extraction holds no DB transaction/row lock. All metadata/text reads scope both project and specification ID.
 History is append-only through this application API; existing 011 grants still allow UPDATE/DELETE at the database role level.
@@ -77,7 +84,7 @@ The add-member contract uses USER_OR_PROJECT_NOT_FOUND for unavailable accounts/
 reading permissions/status, so competing ownership transfers cannot authorize from the previous Owner's stale role.
 Read checks and page/count queries share a REPEATABLE READ snapshot; administrative user status changes are not serialized
 with project locks. Updates to an account after the active-user check can affect subsequent requests rather than cancel an in-flight one.
-Bodies for project POST/PATCH/DELETE (except the bounded raw specification upload described above) are capped at 32 KiB after bearer authorization, before parsing; unknown fields and
+Bodies for project POST/PATCH/DELETE (except the bounded multipart specification upload described above) are capped at 32 KiB after bearer authorization, before parsing; unknown fields and
 scalar coercion are rejected. This is an input bound, not a claim of load-tested service-wide abuse protection.
 
 | Boundary | Controls and tests |

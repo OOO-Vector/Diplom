@@ -63,6 +63,10 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(500).contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .cacheControl(CacheControl.noStore()).body(problems.unexpected(exception));
     }
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<?> uploadSize() { return response(413, "PAYLOAD_TOO_LARGE", "Multipart upload exceeds size limit"); }
+    @ExceptionHandler(org.springframework.web.multipart.MultipartException.class)
+    public ResponseEntity<?> multipart() { return invalid(); }
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> conflict(DataIntegrityViolationException exception) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {

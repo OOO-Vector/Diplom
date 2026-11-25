@@ -198,8 +198,9 @@ For detailed design and evidence, see:
 ## Testing and Reproducibility
 
 Specification import is implemented under `planning/` on the existing `specifications` table (migration 004; grants 011).
-POST `/api/v1/projects/{projectId}/specifications?title=...&filename=...` accepts raw `text/plain` UTF-8 or `application/pdf`
-bytes, not multipart. It returns 201 metadata and Location after commit. GET the collection for paginated version history,
+POST `/api/v1/projects/{projectId}/specifications` accepts `multipart/form-data` with one required `file` (UTF-8 TXT or
+text-layer PDF) and one required UTF-8 `title` field. The original filename comes from the file part; query parameters and
+duplicate/unknown parts are rejected. It returns 201 metadata and Location after commit. GET the collection for paginated version history,
 GET `/{specificationId}` for metadata, or GET `/{specificationId}/text` for UTF-8 text. See the OpenAPI for limits/errors.
 Owner and Member can upload to active projects; archived projects remain readable. Versions are allocated serially under
 the existing project row lock and never overwritten by the application. No new migrations or role grants are needed.
@@ -208,6 +209,13 @@ No decomposition, AI calls or backlog changes are performed. Upload retries crea
 `SpecificationTests` exercises real PostgreSQL persistence, history, rollback, access, PDF/TXT validation and lock contention;
 small PDFs are generated entirely from committed synthetic test code. No user documents or generated uploads are committed.
 The Core coverage threshold remains scoped to Core; the full JaCoCo report also includes the new Planning module.
+Spring multipart limits are 10 MiB/file and 11 MiB/request including overhead; file-size-threshold is 0 (bounded disk staging,
+cleaned by the servlet/Spring resolver after each request). Part headers are capped at 4 KiB to support Unicode filenames.
+Title is limited to 800 UTF-8 bytes and 200 code points after trimming.
+Size failures return 413 Problem Details. Tomcat drains at most 12 MiB of rejected request data; arbitrarily larger uploads may
+have their connection closed. Deployment must bound concurrent requests and provision/limit the servlet temporary directory.
+`SpecificationMultipartHttpTests` uses actual embedded Tomcat HTTP plus PostgreSQL to verify multipart parsing, declared and
+chunked oversize errors, duplicate/missing parts, authorization and temporary-file cleanup; MockMvc alone does not prove servlet limits.
 
 From `backend/`, with JDK 21, Docker and Node.js 24 (for the pinned contract validator), run:
 
